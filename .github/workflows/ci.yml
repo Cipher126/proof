@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: proof
+          POSTGRES_USER: proof
+          POSTGRES_PASSWORD: proof
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U proof -d proof"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      PROOF_DATABASE_URL: postgresql+psycopg://proof:proof@127.0.0.1:5432/proof
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --dev
+      - run: uv run alembic upgrade head
+      - run: uv run pytest
+      - run: uv run python scripts/export_openapi.py
