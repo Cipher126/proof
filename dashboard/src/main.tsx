@@ -21,14 +21,15 @@ type Scenario = {
   provider_event: { amount_minor: number; classification: string };
   transfer_replayed: boolean;
   provider_duplicate: boolean;
-  statement: { content_hash: string; row_count: number };
+  statement: { id: string; content_hash: string; row_count: number };
   findings: Finding[];
 };
 
 type Entry = { account_id: string; amount_minor: number; position: number };
 type Journal = { id: string; entries: Entry[] };
 type Event = { occurred_at: string; kind: string; summary: string };
-type Workspace = { scenario: Scenario; original: Journal; events: Event[]; adjustment?: Journal };
+type Batch = { status: "imported" | "needs_review" | "ready_to_close" | "closed"; closed_at: string | null };
+type Workspace = { scenario: Scenario; original: Journal; events: Event[]; batch: Batch; adjustment?: Journal };
 type View = "Cases" | "Ledger" | "Activity";
 type Filter = "All" | "Open" | "Resolved";
 
@@ -104,7 +105,7 @@ function App() {
   const [view, setView] = useState<View>("Cases");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [filter, setFilter] = useState<Filter>("All");
-  const [busy, setBusy] = useState<"start" | "resolve" | null>(null);
+  const [busy, setBusy] = useState<"start" | "resolve" | "close" | null>(null);
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [lastPosted, setLastPosted] = useState<number | null>(null);
@@ -130,11 +131,12 @@ function App() {
     setConfirm(false);
     try {
       const next = await request<Scenario>("/v1/demo/scenarios/canonical", { method: "POST" });
-      const [original, trace] = await Promise.all([
+      const [original, trace, batch] = await Promise.all([
         tenantRequest<Journal>(next, `/journals/${next.transfer.journal_id}`),
         tenantRequest<{ items: Event[] }>(next, `/operations/transfers/${next.transfer.id}/timeline`),
+        tenantRequest<Batch>(next, `/settlements/batches/${next.statement.id}`),
       ]);
-      setWorkspace({ scenario: next, original, events: trace.items });
+      setWorkspace({ scenario: next, original, events: trace.items, batch });
       setLastPosted(null);
       setFilter("All");
       navigate("Cases");
@@ -155,13 +157,28 @@ function App() {
       setWorkspace(next);
       setConfirm(false);
       if (result.adjustment_journal_id) {
-        const [adjustment, balance] = await Promise.all([
+        const [adjustment, balance, batch] = await Promise.all([
           tenantRequest<Journal>(scenario, `/journals/${result.adjustment_journal_id}`),
           tenantRequest<{ balance_minor: number }>(scenario, `/accounts/${scenario.accounts.customer}/balance`),
+          tenantRequest<Batch>(scenario, `/settlements/batches/${scenario.statement.id}`),
         ]);
-        setWorkspace({ ...next, adjustment });
+        setWorkspace({ ...next, adjustment, batch });
         setLastPosted(balance.balance_minor);
       }
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function closeBatch() {
+    if (!workspace || !scenario) return;
+    setBusy("close");
+    setError("");
+    try {
+      const batch = await tenantRequest<Batch>(scenario, `/demo/settlements/${scenario.statement.id}/close`, "POST");
+      setWorkspace({ ...workspace, batch });
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -177,6 +194,9 @@ function App() {
   } : {};
   const resolutionEvent: Event[] = finding?.resolved_at ? [{
     occurred_at: finding.resolved_at, kind: "resolution", summary: "Fee adjustment posted and finding resolved",
+  }] : [];
+  const closingEvent: Event[] = workspace?.batch.closed_at ? [{
+    occurred_at: workspace.batch.closed_at, kind: "settlement", summary: "Settlement batch closed",
   }] : [];
 
   return (
@@ -264,6 +284,10 @@ function App() {
                 </div>}
                 {resolved && <div className="success" role="status"><Icon name="check" /><div><strong>Adjustment posted</strong>{lastPosted !== null && <span>Customer payable now {money(lastPosted)}</span>}</div>
                   <button onClick={() => navigate("Ledger")}>View journal <Icon name="arrow" size={14} /></button></div>}
+                {workspace?.batch.status === "ready_to_close" && <div className="batch-action">
+                  <button className="button secondary-button" onClick={closeBatch} disabled={!!busy}>{busy === "close" ? "Closing…" : "Close settlement batch"}</button>
+                </div>}
+                {workspace?.batch.status === "closed" && <p className="batch-action" role="status"><Tag tone="green">Settlement closed</Tag></p>}
               </section>
             </div>
           </>}
@@ -286,7 +310,7 @@ function App() {
           {view === "Activity" && workspace && scenario && <div className="activity-layout">
             <section className="panel">
               <div className="panel-heading"><div><h2>Transfer activity</h2><p>{scenario.transfer.client_reference}</p></div><Tag tone="violet">Fictional</Tag></div>
-              <ol className="event-list">{[...workspace.events, ...resolutionEvent].map((item, index) =>
+              <ol className="event-list">{[...workspace.events, ...resolutionEvent, ...closingEvent].map((item, index) =>
                 <li key={index}><span className="event-icon"><Icon name={item.kind === "resolution" ? "check" : "activity"} size={16} /></span>
                   <div><small>{item.kind.replaceAll("_", " ")}</small><strong>{item.summary}</strong></div>
                   <time dateTime={item.occurred_at}>{new Date(item.occurred_at).toLocaleTimeString([], { timeStyle: "medium" })}</time></li>)}</ol>

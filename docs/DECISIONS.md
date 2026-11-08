@@ -74,6 +74,39 @@ Record consequential and difficult-to-reverse choices here before implementation
 - **Consequences:** Failed runs leave no partial scenario. A saturated sandbox returns a retryable response or requires rotation to a fresh dedicated demo database. The cap applies across API workers. Posted records remain append-only.
 - **Revisit when:** Public hosting needs per-visitor fairness, automatic retention, or more capacity.
 
+## ADR-009: Reserve funds before deferred capture
+
+- **Status:** Accepted
+- **Decision:** Preserve immediate transfers. Deferred payments reserve available funds at authorization without posting a journal. Capture posts the principal and optional fee together. Failure, cancellation and expiry release the reservation. Refunds post new journals and cannot exceed captured principal. Each lifecycle command stores an immutable transition and an outbox event in the same transaction.
+- **Concurrency:** Lock the transfer first, then its accounts in identifier order. Immediate payments also subtract active holds while holding the account lock.
+- **Tradeoff:** Available funds are derived from journals and active reservations. Revisit with measured aggregation or lock contention.
+
+## ADR-010: Deliver outbox events at least once using stable event IDs
+
+- **Status:** Accepted
+- **Decision:** The external HTTP worker claims one due event with a PostgreSQL row lock, sends it with a stable idempotency key, and commits delivery only after a 2xx response. Timeouts and failed responses use the existing bounded retry and dead-letter schedule. A trusted local operator can requeue a dead letter with an audit record.
+- **Consequence:** A worker crash releases the row lock. A crash after receiver acceptance and before commit can resend an event. Receivers must deduplicate using the event ID.
+- **Revisit when:** Slow or high-volume receivers justify a separate lease protocol or broker.
+
+## ADR-011: Treat each imported provider statement as one settlement batch
+
+- **Status:** Accepted
+- **Decision:** Store the evidence unchanged. Derive batch state from its reconciliation run and findings. Close a reconciled batch only after every finding is resolved. Store close time and append an audit event.
+- **Concurrency:** Serialize imports for a tenant and serialize reconciliation and closure on the statement row.
+- **Tradeoff:** Each immutable statement gets one run. Revised provider evidence is a new import.
+
+## ADR-012: Separate demo sessions from named operator API credentials
+
+- **Status:** Accepted
+- **Decision:** Use tenant-bound, expiring and revocable API keys for named principals in operations mode. Assign integrator, operator, auditor or provider roles. Provision and revoke keys through the trusted local administration CLI. Keep anonymous guided mutations exclusive to sandbox and development.
+- **Tradeoff:** This is API-based service access. Interactive identity federation and delegated approval are separate integrations.
+
+## ADR-013: Separate sandbox retention from runtime writes
+
+- **Status:** Accepted
+- **Decision:** An opt-in PostgreSQL maintenance process removes only expired anonymous demo tenants past a grace period. It requires a dedicated sandbox database and a migration-owner connection. Named credentials permanently exclude a tenant from pruning. Dry-run selection is the default.
+- **Consequence:** Ordinary API roles cannot perform retention. Maintenance serializes against demo creation and temporarily locks protected tables while deleting tenant-scoped rows. PostgreSQL rolls back the deletes and trigger changes together on failure.
+
 ## ADR template
 
 ### ADR-NNN: Decision title

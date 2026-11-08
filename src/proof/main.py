@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import logging
 import os
+import json
+import re
 import uuid
+from time import perf_counter
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError
+from opentelemetry import propagate, trace
+from prometheus_client import CONTENT_TYPE_LATEST
 
 from proof.config import settings
 from proof.db import SessionLocal
@@ -20,11 +25,14 @@ from proof.ledger.api import router as ledger_router
 from proof.payments.api import router as payments_router
 from proof.providers.api import router as providers_router
 from proof.operations.api import router as operations_router
+from proof.operations import telemetry
 from proof.reconciliation.api import router as reconciliation_router
 from proof.demo import router as demo_router, tenant_router as demo_tenant_router
 
 logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("proof")
+telemetry.configure_tracing("proof-api")
+tracer = trace.get_tracer(__name__)
 
 app = FastAPI(
     title="Proof API",
@@ -48,15 +56,35 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    supplied = request.headers.get("X-Request-ID", "")
+    request_id = supplied if re.fullmatch(r"[A-Za-z0-9_-]{1,80}", supplied) else str(uuid.uuid4())
     request.state.request_id = request_id
-    response = await call_next(request)
+    started = perf_counter()
+    status = 500
+    with tracer.start_as_current_span(
+        "proof.request", context=propagate.extract(request.headers), kind=trace.SpanKind.SERVER,
+    ) as span:
+        try:
+            response = await call_next(request)
+            status = response.status_code
+        finally:
+            route = getattr(request.scope.get("route"), "path", "unmatched")
+            span.set_attribute("http.route", route)
+            span.set_attribute("http.request.method", request.method)
+            span.set_attribute("http.response.status_code", status)
+            telemetry.REQUESTS.labels(route, request.method, str(status)).inc()
+            telemetry.LATENCY.labels(route).observe(perf_counter() - started)
+            if status >= 500:
+                span.set_status(trace.StatusCode.ERROR)
+            logger.info(json.dumps({"event": "http.completed", "request_id": request_id,
+                                    "route": route, "method": request.method, "status": status}))
     response.headers["X-Request-ID"] = request_id
     return response
 
 
 @app.exception_handler(ProofError)
 async def proof_error_handler(request: Request, exc: ProofError) -> JSONResponse:
+    telemetry.ERRORS.labels(exc.code).inc()
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": {"code": exc.code, "message": exc.message, "request_id": request.state.request_id}},
@@ -91,6 +119,14 @@ def ready() -> dict[str, str]:
     except OperationalError:
         raise ProofError("database_unavailable", "database is unavailable", 503) from None
     return {"status": "ready"}
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics() -> Response:
+    if os.getenv("PROOF_METRICS_ENABLED") != "1":
+        raise ProofError("not_found", "endpoint was not found", 404)
+    with SessionLocal() as session:
+        return Response(telemetry.scrape(session), headers={"Content-Type": CONTENT_TYPE_LATEST})
 
 
 def run() -> None:

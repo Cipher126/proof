@@ -42,8 +42,8 @@ The operations console runs this story against the real backend; it is not a sta
 ## Honest limitations
 
 - All providers, tenants, funds, and incidents are fictional.
-- Guided scenario creation is anonymous and subject to database-wide admission caps. Tenant access is scoped to the one-hour credential issued for that scenario. A public instance needs per-client fairness and managed retention.
-- Provider signing uses one development secret; production requires per-tenant secret rotation.
-- The outbox currently publishes to a local demonstration sink rather than an external broker.
-- Authentication, RBAC, durable file storage, and dual approval are future production-hardening work.
+- Guided scenario creation is anonymous, rate-limited, and scoped to an expiring tenant credential. Retention is opt-in on a dedicated database.
+- Provider signing uses a deployment-level secret. Provider-specific secret rotation is future work.
+- The HTTP worker provides at-least-once delivery. A receiver must deduplicate stable event IDs.
+- Operations mode uses named, revocable scoped API credentials. Interactive sign-in, external statement file storage, and dual approval remain separate integrations.
 - Performance results describe one local synthetic environment and are not production-scale claims.

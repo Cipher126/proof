@@ -88,5 +88,11 @@ The [decision log](docs/DECISIONS.md), [runbook](docs/RUNBOOK.md), and
 - Content-addressed provider statement evidence with idempotent imports and reruns.
 - Explainable reconciliation findings for missing, duplicated, mismatched, and unexpected records.
 - Audited operator resolution that posts new balanced adjustments rather than rewriting history.
+- Deferred payments with expiring holds, capture fees, cancellation and partial refunds.
+- Settlement batch closure, named scoped API credentials, HTTP outbox delivery and operator requeue.
+- Prometheus metrics, a Grafana dashboard, optional OpenTelemetry traces and sandbox retention.
+
+See [deployment and operations](docs/DEPLOYMENT.md) for hosted Compose, API key provisioning,
+retention, and monitoring. The guided console also supports closing the settlement batch.
 
 The product contract and roadmap live in `memory.md` and `docs/`.

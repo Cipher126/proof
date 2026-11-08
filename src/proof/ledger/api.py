@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from proof.db import get_session
-from proof.identity import TenantAccess, active_tenant, require_development
+from proof.identity import TenantAccess, active_tenant, require_development, require_permission
 from proof.ledger import service
 from proof.ledger.schemas import (
     AccountCreate,
@@ -38,7 +38,7 @@ def create_tenant(payload: TenantCreate, session: DbSession) -> TenantRead:
     "/tenants/{tenant_id}/accounts",
     response_model=AccountRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_development)],
+    dependencies=[Depends(require_permission("ledger"))],
 )
 def create_account(
     tenant_id: uuid.UUID,
@@ -53,7 +53,8 @@ def create_account(
     )
 
 
-@router.get("/tenants/{tenant_id}/accounts/{account_id}/balance", response_model=BalanceRead)
+@router.get("/tenants/{tenant_id}/accounts/{account_id}/balance", response_model=BalanceRead,
+            dependencies=[Depends(require_permission("read"))])
 def get_balance(
     tenant_id: uuid.UUID,
     account_id: uuid.UUID,
@@ -68,7 +69,7 @@ def get_balance(
     "/tenants/{tenant_id}/journals",
     response_model=JournalRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_development)],
+    dependencies=[Depends(require_permission("ledger"))],
 )
 def post_journal(
     tenant_id: uuid.UUID,
@@ -79,7 +80,8 @@ def post_journal(
     return JournalRead.model_validate(service.post_journal(session, tenant_id, payload))
 
 
-@router.get("/tenants/{tenant_id}/journals/{journal_id}", response_model=JournalRead)
+@router.get("/tenants/{tenant_id}/journals/{journal_id}", response_model=JournalRead,
+            dependencies=[Depends(require_permission("read"))])
 def get_journal(
     tenant_id: uuid.UUID,
     journal_id: uuid.UUID,
@@ -98,7 +100,7 @@ class ReversalCreate(BaseModel):
     "/tenants/{tenant_id}/journals/{journal_id}/reversals",
     response_model=JournalRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_development)],
+    dependencies=[Depends(require_permission("ledger"))],
 )
 def reverse_journal(
     tenant_id: uuid.UUID,

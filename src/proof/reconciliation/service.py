@@ -4,13 +4,14 @@ import hashlib
 import json
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from proof.errors import NotFoundError, ProofError, TenantBoundaryError
 from proof.ledger import service as ledger_service
+from proof.ledger.models import Tenant
 from proof.ledger.schemas import JournalCreate
 from proof.operations.models import AuditEvent
 from proof.payments.models import Transfer
@@ -20,13 +21,16 @@ from proof.reconciliation.models import (
     StatementImport,
     StatementLine,
 )
-from proof.reconciliation.schemas import FindingResolutionCreate, StatementImportCreate
+from proof.reconciliation.schemas import (
+    FindingResolutionCreate, SettlementBatchRead, StatementImportCreate, StatementImportRead,
+)
 
 
 def import_statement(
     session: Session, tenant_id: uuid.UUID, command: StatementImportCreate
 ) -> tuple[StatementImport, bool]:
-    ledger_service.require_tenant(session, tenant_id)
+    if session.scalar(select(Tenant.id).where(Tenant.id == tenant_id).with_for_update(key_share=True)) is None:
+        raise NotFoundError("tenant")
     evidence = command.model_dump(mode="json")
     canonical = json.dumps(evidence, sort_keys=True, separators=(",", ":"))
     content_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -38,6 +42,7 @@ def import_statement(
         )
     )
     if existing is not None:
+        session.commit()
         return existing, True
     statement = StatementImport(
         tenant_id=tenant_id,
@@ -71,19 +76,26 @@ def import_statement(
     return statement, False
 
 
-def _statement(session: Session, tenant_id: uuid.UUID, statement_id: uuid.UUID) -> StatementImport:
-    statement = session.get(StatementImport, statement_id)
+def _statement(
+    session: Session, tenant_id: uuid.UUID, statement_id: uuid.UUID, *, lock: bool = False,
+) -> StatementImport:
+    query = select(StatementImport).where(
+        StatementImport.id == statement_id, StatementImport.tenant_id == tenant_id,
+    )
+    statement = session.scalar(query.with_for_update() if lock else query)
     if statement is None:
         raise NotFoundError("statement")
-    if statement.tenant_id != tenant_id:
-        raise TenantBoundaryError()
     return statement
+
+
+def _utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 def reconcile_statement(
     session: Session, tenant_id: uuid.UUID, statement_id: uuid.UUID
 ) -> tuple[ReconciliationRun, list[ReconciliationFinding]]:
-    statement = _statement(session, tenant_id, statement_id)
+    statement = _statement(session, tenant_id, statement_id, lock=True)
     existing = session.scalar(
         select(ReconciliationRun).where(
             ReconciliationRun.statement_import_id == statement.id
@@ -102,6 +114,16 @@ def reconcile_statement(
         .order_by(StatementLine.line_number)
     ).all()
     counts = Counter(line.client_reference for line in lines)
+    candidates = session.scalars(select(Transfer).where(
+        Transfer.tenant_id == tenant_id,
+        or_(
+            Transfer.client_reference.in_(list(counts)),
+            Transfer.journal_id.is_not(None)
+            & (Transfer.completed_at >= statement.period_start)
+            & (Transfer.completed_at <= statement.period_end),
+        ),
+    )).all()
+    by_reference = {transfer.client_reference: transfer for transfer in candidates}
     seen: set[str] = set()
     referenced: set[str] = set()
     findings: list[ReconciliationFinding] = []
@@ -122,12 +144,7 @@ def reconcile_statement(
             )
             continue
         seen.add(line.client_reference)
-        transfer = session.scalar(
-            select(Transfer).where(
-                Transfer.tenant_id == tenant_id,
-                Transfer.client_reference == line.client_reference,
-            )
-        )
+        transfer = by_reference.get(line.client_reference)
         if transfer is None:
             findings.append(
                 ReconciliationFinding(
@@ -156,11 +173,18 @@ def reconcile_statement(
             explanation = "Provider and internal transfer currencies differ."
             expected = {"currency": transfer.currency}
             actual = {"currency": line.currency}
-        elif transfer.status != line.provider_status:
+        elif ("succeeded" if transfer.status == "reversed" else transfer.status) != line.provider_status:
             kind = "unexpected_state"
             explanation = "Provider and internal transfer states differ."
             expected = {"status": transfer.status}
             actual = {"status": line.provider_status}
+        elif transfer.journal_id is not None and transfer.completed_at is not None:
+            internal_time, reported_time = _utc(transfer.completed_at), _utc(line.occurred_at)
+            if abs(internal_time - reported_time) > timedelta(hours=1):
+                kind = "timing_difference"
+                explanation = "The provider timestamp differs from capture by more than one hour."
+                expected = {"occurred_at": internal_time.isoformat()}
+                actual = {"occurred_at": reported_time.isoformat()}
         if kind:
             findings.append(
                 ReconciliationFinding(
@@ -175,15 +199,8 @@ def reconcile_statement(
                     actual=actual,
                 )
             )
-    internal = session.scalars(
-        select(Transfer).where(
-            Transfer.tenant_id == tenant_id,
-            Transfer.created_at >= statement.period_start,
-            Transfer.created_at <= statement.period_end,
-        )
-    ).all()
-    for transfer in internal:
-        if transfer.client_reference not in referenced:
+    for transfer in candidates:
+        if transfer.journal_id is not None and transfer.client_reference not in referenced:
             findings.append(
                 ReconciliationFinding(
                     tenant_id=tenant_id,
@@ -201,6 +218,45 @@ def reconcile_statement(
     run.completed_at = datetime.now(timezone.utc)
     session.commit()
     return run, list_findings(session, tenant_id, run.id)
+
+
+def settlement_batch(
+    session: Session, tenant_id: uuid.UUID, statement_id: uuid.UUID, *,
+    close_reason: str | None = None, actor: str | None = None,
+) -> SettlementBatchRead:
+    statement = _statement(session, tenant_id, statement_id, lock=close_reason is not None)
+    run = session.scalar(select(ReconciliationRun).where(
+        ReconciliationRun.statement_import_id == statement_id,
+        ReconciliationRun.tenant_id == tenant_id,
+    ))
+    pending = 0 if run is None else session.scalar(select(func.count()).select_from(ReconciliationFinding).where(
+        ReconciliationFinding.tenant_id == tenant_id,
+        ReconciliationFinding.run_id == run.id,
+        ReconciliationFinding.status == "open",
+    )) or 0
+    if close_reason is not None:
+        if run is None or run.status != "completed" or pending:
+            raise ProofError("settlement_not_ready", "reconcile and resolve all findings before closing", 409)
+        if run.closed_at is None:
+            run.closed_at = datetime.now(timezone.utc)
+            session.add(AuditEvent(
+                tenant_id=tenant_id, actor=actor or "development", action="settlement.closed",
+                resource_type="statement_import", resource_id=statement.id, reason=close_reason,
+                details={"run_id": str(run.id)},
+            ))
+            session.commit()
+    rows = session.execute(select(StatementLine.currency, func.sum(StatementLine.amount_minor)).where(
+        StatementLine.tenant_id == tenant_id, StatementLine.statement_import_id == statement_id,
+    ).group_by(StatementLine.currency))
+    batch_status = "imported" if run is None else (
+        "closed" if run.closed_at is not None else "needs_review" if pending else "ready_to_close"
+    )
+    return SettlementBatchRead(
+        statement=StatementImportRead.model_validate(statement), status=batch_status,
+        run_id=run.id if run else None, open_findings=pending,
+        provider_totals_minor={currency: int(total) for currency, total in rows},
+        closed_at=run.closed_at if run else None,
+    )
 
 
 def list_findings(

@@ -20,27 +20,27 @@ Work in order. Do not expand later milestones while an earlier milestone lacks i
 
 **Exit evidence:** atomic posting, derived balances, PostgreSQL balance/immutability triggers, reversals, API tests, and direct PostgreSQL invariant tests are implemented and passing.
 
-## Milestone 2 — Idempotent payment commands (transfer slice verified)
+## Milestone 2 — Idempotent payment commands
 
 - Transfers, holds, fees, refunds, explicit state transitions, and idempotency records.
 - Safe concurrent spending rules.
 - Transactional outbox written with financial state.
 
-**Evidence:** PostgreSQL tests cover racing retries and competing spends. Holds, refunds, the full payment state machine, and crash-injection evidence remain open.
+**Evidence:** Immediate transfers and deferred payment intents share account locking. Deferred intents support authorization, submission, capture with fees, failure, cancellation, expiry, and partial or full refunds. PostgreSQL tests cover racing retries and competing holds.
 
-## Milestone 3 — Provider evidence and failures (demo slice verified)
+## Milestone 3 — Provider evidence and failures
 
 - Simulated provider adapter, signed webhooks, replay defense, retries, and out-of-order handling.
 - Worker processing, dead letters, causal timelines, and failure injection.
 
-**Evidence:** API tests verify signed evidence, duplicate handling, and classification. PostgreSQL tests verify local outbox completion and dead lettering. The worker runs bounded batches against a local sink. External delivery and crash recovery remain open.
+**Evidence:** Signed evidence binds tenant, timestamp and event ID. The worker supports external HTTP delivery, bounded retries, dead-letter requeue, and stable IDs after a simulated process crash. Consumers must deduplicate. Provider evidence remains separate from trusted payment transitions.
 
-## Milestone 4 — Settlement and reconciliation (demo slice verified)
+## Milestone 4 — Settlement and reconciliation
 
 - Statement import, evidence hashing, deterministic matching, discrepancy taxonomy, reruns, and resolution workflows.
 - Adjustment and reversal accounting.
 
-**Evidence:** the guided demo imports a normalized JSON statement, reconciles it, and posts an audited adjustment. Settlement batch lifecycle, timing discrepancy rules, and concurrent import and resolution tests remain open.
+**Evidence:** Imported statements serve as settlement batches. Matching checks capture timing and evidence discrepancies. Concurrent imports and adjustments converge. An operator can close a batch after its findings are resolved.
 
 ## Milestone 5 — Operations console and guided demo ✅
 
@@ -54,4 +54,4 @@ Work in order. Do not expand later milestones while an earlier milestone lacks i
 - Threat model, runbooks, telemetry dashboards, load and fault reports, architecture diagrams, public case study, and hosted demo.
 - Honest limitations and architectural tradeoffs.
 
-**Evidence:** the local container serves the dashboard after migration. Scenario creation is atomic and subject to database-wide admission limits. The sandbox issues expiring, tenant-scoped credentials and uses server-derived adjustments. Public hosting still requires per-client limits and managed demo-data retention.
+**Evidence:** The local image includes Prometheus metrics, a Grafana dashboard, optional OTLP tracing, named scoped credentials, sandbox admission caps, and opt-in retention. The hosted Compose profile and deployment guide are included. A publicly reachable deployment and live verification with the chosen host, collector, and receiver remain pending.

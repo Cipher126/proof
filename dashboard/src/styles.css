@@ -142,6 +142,7 @@ td, th { padding: 10px 15px; border-bottom: 1px solid var(--line); }
 .success strong, .success span { display: block; }
 .success button { display: inline-flex; align-items: center; gap: 5px; color: inherit; background: transparent; border: 0; padding: 4px; margin-left: auto; font-weight: 700; }
 .success button:hover { text-decoration: underline; }
+.batch-action { margin: 10px 19px 0; }
 
 .stack { display: grid; gap: 16px; }
 .journal { overflow: hidden; }

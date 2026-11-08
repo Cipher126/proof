@@ -83,6 +83,8 @@ def test_sandbox_credential_is_tenant_bound_and_supplies_audit_actor(client, mon
     assert client.post(adjust, headers=auth).json() == response.json()
     balance = client.get(f"{base}/accounts/{scenario['accounts']['customer']}/balance", headers=auth)
     assert balance.json()["balance_minor"] == 2_475_000
+    close = f"{base}/demo/settlements/{scenario['statement']['id']}/close"
+    assert client.post(close, headers=auth).json()["status"] == "closed"
 
     test_session = contextmanager(app.dependency_overrides[get_session])
     with test_session() as session:
@@ -90,7 +92,7 @@ def test_sandbox_credential_is_tenant_bound_and_supplies_audit_actor(client, mon
             identity.DemoCredential.verifier == hashlib.sha256(token.encode()).hexdigest()
         ))
         assert credential is not None
-        audit = session.scalar(select(AuditEvent))
+        audit = session.scalar(select(AuditEvent).where(AuditEvent.action == "reconciliation.finding_resolved"))
         assert audit.actor == response.json()["resolved_by"] == f"demo:{credential.id}"
         credential.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
         session.commit()
@@ -111,10 +113,10 @@ def test_failed_setup_rolls_back_and_admission_stops_at_capacity(client, monkeyp
     with test_session() as session:
         assert session.scalar(select(func.count()).select_from(Tenant)) == 0
 
-    monkeypatch.setattr(demo, "MAX_SCENARIOS_PER_HOUR", 1)
+    monkeypatch.setattr(demo, "MAX_SCENARIOS_PER_CLIENT_HOUR", 1)
     assert client.post("/v1/demo/scenarios/canonical").status_code == 200
     blocked = client.post("/v1/demo/scenarios/canonical")
     assert blocked.status_code == 429
-    assert blocked.json()["error"]["code"] == "demo_hourly_limit"
+    assert blocked.json()["error"]["code"] == "demo_client_limit"
     with test_session() as session:
         assert session.scalar(select(func.count()).select_from(Tenant)) == 1

@@ -3,11 +3,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from proof.config import settings
@@ -21,8 +24,8 @@ PROVIDER = "proof-simulated-payments"
 SIGNATURE_TOLERANCE = timedelta(minutes=5)
 
 
-def sign_payload(timestamp: str, body: bytes) -> str:
-    message = timestamp.encode("ascii") + b"." + body
+def sign_payload(tenant_id: uuid.UUID, event_id: str, timestamp: str, body: bytes) -> str:
+    message = f"v1.{timestamp}.{tenant_id}.{event_id}.".encode("ascii") + body
     return hmac.new(
         settings.simulated_provider_secret.encode("utf-8"), message, hashlib.sha256
     ).hexdigest()
@@ -52,23 +55,31 @@ def ingest_webhook(
 ) -> tuple[ProviderEvent, bool]:
     ledger_service.require_tenant(session, tenant_id)
     now = now or datetime.now(timezone.utc)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", event_id):
+        raise ProofError("invalid_provider_event_id", "invalid provider event ID")
+    if not re.fullmatch(r"[0-9]{1,12}", timestamp) or not re.fullmatch(r"[0-9a-fA-F]{64}", signature):
+        raise ProofError("invalid_provider_signature", "provider signature or timestamp is invalid", 401)
+    if settings.environment == "operations" and (
+        settings.simulated_provider_secret == "development-only-change-me"
+        or len(settings.simulated_provider_secret) < 32
+    ):
+        raise ProofError("provider_not_configured", "provider signing secret is not configured", 503)
     try:
         provider_time = datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
     except (ValueError, OverflowError) as exc:
         raise ProofError("invalid_provider_timestamp", "provider timestamp is invalid", 401) from exc
     if abs(now - provider_time) > SIGNATURE_TOLERANCE:
         raise ProofError("stale_provider_event", "provider timestamp is outside the replay window", 401)
-    expected = sign_payload(timestamp, body)
+    expected = sign_payload(tenant_id, event_id, timestamp, body)
     if not hmac.compare_digest(expected, signature.lower()):
         raise ProofError("invalid_provider_signature", "provider signature is invalid", 401)
     payload_hash = hashlib.sha256(body).hexdigest()
-    existing = session.scalar(
-        select(ProviderEvent).where(
+    existing_query = select(ProviderEvent).where(
             ProviderEvent.tenant_id == tenant_id,
             ProviderEvent.provider == PROVIDER,
             ProviderEvent.event_id == event_id,
-        )
     )
+    existing = session.scalar(existing_query)
     if existing is not None:
         if existing.payload_hash != payload_hash:
             raise ProofError(
@@ -80,7 +91,7 @@ def ingest_webhook(
     try:
         decoded = json.loads(body)
         payload = ProviderWebhook.model_validate(decoded)
-    except (json.JSONDecodeError, ValidationError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
         raise ProofError("invalid_provider_payload", "provider payload is invalid") from exc
     transfer = session.scalar(
         select(Transfer).where(
@@ -88,7 +99,8 @@ def ingest_webhook(
             Transfer.client_reference == payload.client_reference,
         )
     )
-    event = ProviderEvent(
+    insert = pg_insert if session.get_bind().dialect.name == "postgresql" else sqlite_insert
+    created_id = session.scalar(insert(ProviderEvent).values(
         tenant_id=tenant_id,
         provider=PROVIDER,
         event_id=event_id,
@@ -104,11 +116,13 @@ def ingest_webhook(
         transfer_id=transfer.id if transfer else None,
         provider_timestamp=provider_time,
         received_at=now,
-    )
-    session.add(event)
+    ).on_conflict_do_nothing(index_elements=["tenant_id", "provider", "event_id"])
+      .returning(ProviderEvent.id))
+    event = session.scalar(existing_query)
+    if event is None or event.payload_hash != payload_hash:
+        raise ProofError("provider_event_conflict", "the provider event ID was reused with different content", 409)
     session.commit()
-    session.refresh(event)
-    return event, False
+    return event, created_id is None
 
 
 def build_demo_event(
@@ -149,7 +163,7 @@ def build_demo_event(
         tenant_id,
         event_id=event_id,
         timestamp=timestamp,
-        signature=sign_payload(timestamp, body),
+        signature=sign_payload(tenant_id, event_id, timestamp, body),
         body=body,
         now=now,
     )

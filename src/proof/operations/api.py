@@ -9,10 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from proof.db import get_session
-from proof.identity import TenantAccess, active_tenant
+from proof.identity import TenantAccess, active_tenant, require_permission
 from proof.ledger import service as ledger_service
 from proof.messaging.models import OutboxEvent
 from proof.payments import service as payment_service
+from proof.payments.models import PaymentChange
 from proof.providers.models import ProviderEvent
 
 router = APIRouter(prefix="/v1", tags=["operations"])
@@ -34,6 +35,7 @@ class TransferTimeline(BaseModel):
 @router.get(
     "/tenants/{tenant_id}/operations/transfers/{transfer_id}/timeline",
     response_model=TransferTimeline,
+    dependencies=[Depends(require_permission("read"))],
 )
 def transfer_timeline(
     tenant_id: uuid.UUID,
@@ -42,7 +44,6 @@ def transfer_timeline(
     _: Annotated[TenantAccess, Depends(active_tenant)],
 ) -> TransferTimeline:
     transfer = payment_service.get_transfer(session, tenant_id, transfer_id)
-    journal = ledger_service.get_journal(session, tenant_id, transfer.journal_id)
     outbox = session.scalars(
         select(OutboxEvent).where(
             OutboxEvent.tenant_id == tenant_id,
@@ -63,7 +64,10 @@ def transfer_timeline(
             summary="Transfer committed",
             data={"status": transfer.status, "client_reference": transfer.client_reference},
         ),
-        TimelineItem(
+    ]
+    if transfer.journal_id is not None:
+        journal = ledger_service.get_journal(session, tenant_id, transfer.journal_id)
+        items.append(TimelineItem(
             occurred_at=journal.posted_at.isoformat() if journal.posted_at else journal.created_at.isoformat(),
             kind="journal",
             summary="Balanced journal posted",
@@ -78,8 +82,16 @@ def transfer_timeline(
                     for entry in journal.entries
                 ],
             },
-        ),
-    ]
+        ))
+    changes = session.scalars(select(PaymentChange).where(
+        PaymentChange.tenant_id == tenant_id, PaymentChange.transfer_id == transfer_id,
+    ))
+    items.extend(TimelineItem(
+        occurred_at=change.created_at.isoformat(),
+        kind="payment_transition",
+        summary=f"{change.action}: {change.from_status} → {change.to_status}",
+        data={"action": change.action, "journal_id": str(change.journal_id) if change.journal_id else None},
+    ) for change in changes)
     items.extend(
         TimelineItem(
             occurred_at=event.occurred_at.isoformat(),

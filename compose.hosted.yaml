@@ -1,0 +1,49 @@
+services:
+  migrate:
+    image: ${PROOF_IMAGE:-proof:local}
+    build: .
+    command: [".venv/bin/alembic", "upgrade", "head"]
+    environment:
+      PROOF_DATABASE_URL: ${PROOF_MIGRATION_DATABASE_URL:?Set the migration-owner connection string}
+  api:
+    image: ${PROOF_IMAGE:-proof:local}
+    build: .
+    command: [".venv/bin/uvicorn", "proof.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--forwarded-allow-ips", "${PROOF_TRUSTED_PROXY_IPS:-127.0.0.1}"]
+    ports:
+      - "127.0.0.1:18080:8000"
+    environment:
+      PROOF_ENVIRONMENT: ${PROOF_ENVIRONMENT:-sandbox}
+      PROOF_DATABASE_URL: ${PROOF_RUNTIME_DATABASE_URL:?Set the runtime connection string}
+      PROOF_ADMISSION_SECRET: ${PROOF_ADMISSION_SECRET:?Set a random admission secret}
+      PROOF_SIMULATED_PROVIDER_SECRET: ${PROOF_SIMULATED_PROVIDER_SECRET:?Set a provider signing secret}
+      PROOF_OTLP_TRACES_ENDPOINT: ${PROOF_OTLP_TRACES_ENDPOINT:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  worker:
+    image: ${PROOF_IMAGE:-proof:local}
+    profiles: ["worker"]
+    command: [".venv/bin/proof-worker"]
+    environment:
+      PROOF_DATABASE_URL: ${PROOF_RUNTIME_DATABASE_URL:?Set the runtime connection string}
+      PROOF_OUTBOX_URL: ${PROOF_OUTBOX_URL:-}
+      PROOF_OUTBOX_TOKEN: ${PROOF_OUTBOX_TOKEN:-}
+      PROOF_OTLP_TRACES_ENDPOINT: ${PROOF_OTLP_TRACES_ENDPOINT:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  maintenance:
+    image: ${PROOF_IMAGE:-proof:local}
+    profiles: ["retain"]
+    command: [".venv/bin/python", "-m", "proof.maintenance", "--apply", "--loop"]
+    environment:
+      PROOF_ENVIRONMENT: ${PROOF_ENVIRONMENT:-sandbox}
+      PROOF_DEMO_RETENTION_ENABLED: "1"
+      PROOF_DATABASE_URL: ${PROOF_MIGRATION_DATABASE_URL:?Set the migration-owner connection string}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure

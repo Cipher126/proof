@@ -30,7 +30,7 @@
 
 - Preserve the event payload and error.
 - Determine whether the destination can safely accept a replay.
-- Do not reset attempts blindly; a future administrative replay command must create an audit event.
+- Use `proof-worker --requeue EVENT_UUID --tenant TENANT_UUID --reason "Receiver recovered"` from a trusted shell. This preserves the event ID and appends an audit record.
 - Reconcile downstream state after recovery.
 
 ## Provider webhook disagreement
@@ -43,10 +43,17 @@
 ## Reconciliation finding
 
 - Read the finding's expected and actual evidence.
-- For a timing difference, wait for the documented window and rerun unchanged evidence.
+- For a timing difference, compare the provider timestamp with capture time. A run preserves its original result. Import corrected evidence as a new statement or acknowledge the original finding with a reason.
 - For a real fee or correction, post a balanced adjustment through the resolution endpoint.
 - Supply an operator identity and meaningful reason.
 - Verify the original finding remains, the adjustment journal balances, and an audit event exists.
+
+## Payment holds and refunds
+
+- Use payment intents for authorization, submission, and capture. Authorization holds the principal for 15 minutes and does not post a journal.
+- The worker marks due holds expired. Available-funds checks already ignore expired reservations.
+- Capture fees post with the principal. Refunds return principal through separate journals and leave the original fee intact.
+- Use the payment transition endpoint for refunds. Generic journal reversal rejects journals owned by a payment or reconciliation workflow.
 
 ## Migration recovery
 

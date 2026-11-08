@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import uuid
+import hmac
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from proof.db import get_session
+from proof.config import settings
 from proof.errors import NotFoundError, ProofError
-from proof.identity import DemoCredential, TenantAccess, active_tenant, issue_demo_credential
+from proof.identity import DemoAdmissionBucket, DemoCredential, TenantAccess, active_tenant, issue_demo_credential, require_demo
 from proof.ledger import service as ledger_service
 from proof.ledger.models import Account
 from proof.ledger.schemas import EntryCreate, JournalCreate
@@ -24,6 +27,7 @@ from proof.reconciliation.models import ReconciliationFinding
 from proof.reconciliation.schemas import (
     FindingRead,
     FindingResolutionCreate,
+    SettlementBatchRead,
     StatementImportCreate,
     StatementImportRead,
     StatementLineCreate,
@@ -34,6 +38,7 @@ tenant_router = APIRouter(prefix="/v1/tenants", tags=["guided demo"])
 CUSTOMER_ACCOUNT = "Customer payable"
 FEE_ACCOUNT = "Provider fee expense"
 MAX_SCENARIOS_PER_HOUR = 60
+MAX_SCENARIOS_PER_CLIENT_HOUR = 12
 MAX_RETAINED_SCENARIOS = 2_000
 DEMO_ADMISSION_LOCK = 1_347_570_511
 
@@ -60,9 +65,9 @@ class CanonicalScenarioRead(BaseModel):
     findings: list[FindingRead]
 
 
-@router.post("/scenarios/canonical", response_model=CanonicalScenarioRead)
+@router.post("/scenarios/canonical", response_model=CanonicalScenarioRead, dependencies=[Depends(require_demo)])
 def run_canonical_scenario(
-    response: Response, session: Session = Depends(get_session)
+    response: Response, session: Session = Depends(get_session), *, request: Request,
 ) -> CanonicalScenarioRead:
     with session.begin():
         connection = session.connection()
@@ -78,6 +83,19 @@ def run_canonical_scenario(
             raise ProofError("demo_storage_limit", "The demo database reached its scenario limit.", 429)
         if recent >= MAX_SCENARIOS_PER_HOUR:
             raise ProofError("demo_hourly_limit", "The hourly demo limit was reached. Try again later.", 429)
+        bucket = int(datetime.now(timezone.utc).timestamp()) // 3600
+        client = request.client.host if request.client else "unknown"
+        secret = os.getenv("PROOF_ADMISSION_SECRET") or settings.simulated_provider_secret
+        client_hash = hmac.digest(secret.encode(), f"{bucket}:{client}".encode(), "sha256").hex()
+        session.execute(delete(DemoAdmissionBucket).where(DemoAdmissionBucket.bucket < bucket))
+        counter = session.get(DemoAdmissionBucket, (bucket, client_hash))
+        if counter is None:
+            session.add(DemoAdmissionBucket(bucket=bucket, client_hash=client_hash, starts=1))
+        elif counter.starts >= MAX_SCENARIOS_PER_CLIENT_HOUR:
+            raise ProofError("demo_client_limit", "This client reached its hourly demo limit.", 429)
+        else:
+            counter.starts += 1
+        session.flush()
         # Existing services commit their units of work. The enclosing transaction
         # owns the actual commit so a failed step cannot leave a partial scenario.
         with Session(bind=connection, join_transaction_mode="rollback_only", expire_on_commit=False) as unit:
@@ -117,8 +135,9 @@ def _create_scenario(session: Session) -> CanonicalScenarioRead:
     key = f"demo-{tenant.id}"
     transfer, _ = payment_service.create_transfer(session, tenant.id, key, command)
     _, transfer_replayed = payment_service.create_transfer(session, tenant.id, key, command)
+    provider_received_at = datetime.now(timezone.utc)
     provider_event, _ = provider_service.build_demo_event(
-        session, tenant.id, transfer.client_reference, "amount_mismatch"
+        session, tenant.id, transfer.client_reference, "amount_mismatch", provider_received_at
     )
     _, provider_duplicate = provider_service.build_demo_event(
         session, tenant.id, transfer.client_reference, "amount_mismatch"
@@ -136,7 +155,7 @@ def _create_scenario(session: Session) -> CanonicalScenarioRead:
                 amount_minor=provider_event.amount_minor,
                 currency="NGN",
                 status="succeeded",
-                occurred_at=provider_event.received_at,
+                    occurred_at=provider_received_at,
             )
         ],
     )
@@ -163,7 +182,10 @@ def _create_scenario(session: Session) -> CanonicalScenarioRead:
     )
 
 
-@tenant_router.post("/{tenant_id}/demo/findings/{finding_id}/adjust", response_model=FindingRead)
+@tenant_router.post(
+    "/{tenant_id}/demo/findings/{finding_id}/adjust", response_model=FindingRead,
+    dependencies=[Depends(require_demo)],
+)
 def adjust_demo_finding(
     finding_id: uuid.UUID,
     session: Annotated[Session, Depends(get_session)],
@@ -208,3 +230,20 @@ def adjust_demo_finding(
         ),
     )
     return FindingRead.model_validate(result)
+
+
+@tenant_router.post(
+    "/{tenant_id}/demo/settlements/{statement_id}/close", response_model=SettlementBatchRead,
+    dependencies=[Depends(require_demo)],
+)
+def close_demo_settlement(
+    statement_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    access: Annotated[TenantAccess, Depends(active_tenant)],
+) -> SettlementBatchRead:
+    if access.role != "demo" or access.audit_actor is None:
+        raise ProofError("invalid_demo_credential", "a valid demo bearer credential is required", 401)
+    return reconciliation_service.settlement_batch(
+        session, access.tenant_id, statement_id,
+        close_reason="Close the reconciled fictional provider statement.", actor=access.audit_actor,
+    )

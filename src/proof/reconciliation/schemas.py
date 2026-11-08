@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from proof.ledger.schemas import EntryCreate
 
@@ -12,17 +12,17 @@ from proof.ledger.schemas import EntryCreate
 class StatementLineCreate(BaseModel):
     provider_reference: str = Field(min_length=1, max_length=160)
     client_reference: str = Field(min_length=1, max_length=160)
-    amount_minor: int = Field(gt=0)
+    amount_minor: int = Field(strict=True, gt=0, le=2**63 - 1)
     currency: str = Field(min_length=3, max_length=3)
     status: Literal["submitted", "succeeded", "failed"]
-    occurred_at: datetime
+    occurred_at: AwareDatetime
 
 
 class StatementImportCreate(BaseModel):
     provider: str = Field(min_length=1, max_length=80)
     filename: str = Field(min_length=1, max_length=240)
-    period_start: datetime
-    period_end: datetime
+    period_start: AwareDatetime
+    period_end: AwareDatetime
     lines: list[StatementLineCreate] = Field(min_length=1, max_length=10_000)
 
     @model_validator(mode="after")
@@ -94,3 +94,16 @@ class FindingResolutionCreate(BaseModel):
         if self.resolution == "acknowledged" and self.adjustment_entries:
             raise ValueError("acknowledged resolutions cannot include adjustment entries")
         return self
+
+
+class SettlementBatchRead(BaseModel):
+    statement: StatementImportRead
+    status: Literal["imported", "needs_review", "ready_to_close", "closed"]
+    run_id: uuid.UUID | None
+    open_findings: int
+    provider_totals_minor: dict[str, int]
+    closed_at: datetime | None
+
+
+class SettlementClose(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)

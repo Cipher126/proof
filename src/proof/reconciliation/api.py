@@ -8,12 +8,14 @@ from sqlalchemy.orm import Session
 
 from proof.db import get_session
 from proof.errors import ProofError
-from proof.identity import TenantAccess, active_tenant, require_development
+from proof.identity import TenantAccess, active_tenant, require_permission
 from proof.reconciliation import service
 from proof.reconciliation.schemas import (
     FindingRead,
     FindingResolutionCreate,
     ReconciliationRunRead,
+    SettlementBatchRead,
+    SettlementClose,
     StatementImportCreate,
     StatementImportRead,
     StatementImportResponse,
@@ -27,7 +29,7 @@ DbSession = Annotated[Session, Depends(get_session)]
     "/tenants/{tenant_id}/settlements/statements",
     response_model=StatementImportResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_development)],
+    dependencies=[Depends(require_permission("settlement"))],
 )
 def import_statement(
     tenant_id: uuid.UUID,
@@ -44,7 +46,7 @@ def import_statement(
 @router.post(
     "/tenants/{tenant_id}/settlements/statements/{statement_id}/reconcile",
     response_model=ReconciliationRunRead,
-    dependencies=[Depends(require_development)],
+    dependencies=[Depends(require_permission("settlement"))],
 )
 def reconcile_statement(
     tenant_id: uuid.UUID,
@@ -62,7 +64,7 @@ def reconcile_statement(
 @router.post(
     "/tenants/{tenant_id}/reconciliation/findings/{finding_id}/resolve",
     response_model=FindingRead,
-    dependencies=[Depends(require_development)],
+    dependencies=[Depends(require_permission("settlement"))],
 )
 def resolve_finding(
     tenant_id: uuid.UUID,
@@ -77,4 +79,26 @@ def resolve_finding(
         raise ProofError("invalid_operator", "a valid operator identity is required")
     return FindingRead.model_validate(
         service.resolve_finding(session, tenant_id, finding_id, actor, payload)
+    )
+
+
+@router.get("/tenants/{tenant_id}/settlements/batches/{statement_id}", response_model=SettlementBatchRead,
+            dependencies=[Depends(require_permission("read"))])
+def get_settlement(
+    tenant_id: uuid.UUID, statement_id: uuid.UUID, session: DbSession,
+    _: Annotated[TenantAccess, Depends(active_tenant)],
+) -> SettlementBatchRead:
+    return service.settlement_batch(session, tenant_id, statement_id)
+
+
+@router.post(
+    "/tenants/{tenant_id}/settlements/batches/{statement_id}/close",
+    response_model=SettlementBatchRead, dependencies=[Depends(require_permission("settlement"))],
+)
+def close_settlement(
+    tenant_id: uuid.UUID, statement_id: uuid.UUID, payload: SettlementClose, session: DbSession,
+    access: Annotated[TenantAccess, Depends(active_tenant)],
+) -> SettlementBatchRead:
+    return service.settlement_batch(
+        session, tenant_id, statement_id, close_reason=payload.reason, actor=access.audit_actor,
     )

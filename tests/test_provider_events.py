@@ -56,7 +56,7 @@ def _setup_transfer(client: TestClient) -> tuple[str, dict]:
 
 def _signed_headers(tenant_id: str, event_id: str, body: bytes) -> dict[str, str]:
     timestamp = str(int(datetime.now(timezone.utc).timestamp()))
-    message = timestamp.encode("ascii") + b"." + body
+    message = f"v1.{timestamp}.{tenant_id}.{event_id}.".encode("ascii") + body
     signature = hmac.new(
         settings.simulated_provider_secret.encode("utf-8"), message, hashlib.sha256
     ).hexdigest()

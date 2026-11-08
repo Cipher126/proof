@@ -131,6 +131,8 @@ def reverse_journal(
     session: Session, tenant_id: uuid.UUID, journal_id: uuid.UUID, reference: str, reason: str
 ) -> JournalTransaction:
     original = get_journal(session, tenant_id, journal_id)
+    if original.reference.startswith(("transfer/", "payment-change/", "reconciliation/")):
+        raise ProofError("managed_journal", "use the owning payment or reconciliation workflow to correct this journal", 409)
     if original.status != "posted":
         raise ProofError("journal_not_posted", "only posted journals can be reversed")
     existing = session.scalar(

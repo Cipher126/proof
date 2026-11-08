@@ -4,10 +4,12 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from proof.db import get_session
-from proof.identity import TenantAccess, active_tenant, require_development
+from proof.errors import ProofError
+from proof.identity import TenantAccess, active_tenant, require_development, require_permission
 from proof.providers import service
 from proof.providers.schemas import (
     DemoProviderEventCreate,
@@ -22,7 +24,7 @@ DbSession = Annotated[Session, Depends(get_session)]
 @router.post(
     "/tenants/{tenant_id}/providers/simulated/webhooks",
     response_model=ProviderEventResponse,
-    dependencies=[Depends(require_development)],
+    dependencies=[Depends(require_permission("provider"))],
 )
 async def receive_simulated_webhook(
     tenant_id: uuid.UUID,
@@ -33,13 +35,19 @@ async def receive_simulated_webhook(
     signature: Annotated[str, Header(alias="X-Proof-Signature")],
     _: Annotated[TenantAccess, Depends(active_tenant)],
 ) -> ProviderEventResponse:
-    event, duplicate = service.ingest_webhook(
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > 64 * 1024:
+            raise ProofError("provider_payload_too_large", "provider payload exceeds 64 KiB", 413)
+        body.extend(chunk)
+    event, duplicate = await run_in_threadpool(
+        service.ingest_webhook,
         session,
         tenant_id,
         event_id=event_id,
         timestamp=timestamp,
         signature=signature,
-        body=await request.body(),
+        body=bytes(body),
     )
     return ProviderEventResponse(
         event=ProviderEventRead.model_validate(event), duplicate=duplicate

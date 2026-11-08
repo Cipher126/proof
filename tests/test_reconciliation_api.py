@@ -88,6 +88,8 @@ def test_reconciliation_is_idempotent_and_resolves_with_adjustment(client: TestC
     assert first_import.status_code == 201, first_import.text
     assert first_import.json()["duplicate"] is False
     statement_id = first_import.json()["statement"]["id"]
+    batch = f"/v1/tenants/{tenant_id}/settlements/batches/{statement_id}"
+    assert client.get(batch, headers=headers).json()["status"] == "imported"
 
     duplicate_import = client.post(
         f"/v1/tenants/{tenant_id}/settlements/statements", headers=headers, json=payload
@@ -105,6 +107,8 @@ def test_reconciliation_is_idempotent_and_resolves_with_adjustment(client: TestC
     assert finding["kind"] == "amount_mismatch"
     assert finding["expected"] == {"amount_minor": 2_000}
     assert finding["actual"] == {"amount_minor": 1_750}
+    assert client.get(batch, headers=headers).json()["status"] == "needs_review"
+    assert client.post(batch + "/close", headers=headers, json={"reason": "Close settlement"}).status_code == 409
 
     repeated_run = client.post(
         f"/v1/tenants/{tenant_id}/settlements/statements/{statement_id}/reconcile",
@@ -129,6 +133,11 @@ def test_reconciliation_is_idempotent_and_resolves_with_adjustment(client: TestC
     assert resolved.status_code == 200, resolved.text
     assert resolved.json()["status"] == "resolved"
     assert resolved.json()["adjustment_journal_id"] is not None
+    assert client.get(batch, headers=headers).json()["status"] == "ready_to_close"
+    closed = client.post(batch + "/close", headers=headers, json={"reason": "Close settlement"})
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["status"] == "closed"
+    assert closed.json()["provider_totals_minor"] == {"NGN": 1_750}
 
     balance = client.get(
         f"/v1/tenants/{tenant_id}/accounts/{context['destination']}/balance",
