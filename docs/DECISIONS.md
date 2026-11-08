@@ -107,6 +107,13 @@ Record consequential and difficult-to-reverse choices here before implementation
 - **Decision:** An opt-in PostgreSQL maintenance process removes only expired anonymous demo tenants past a grace period. It requires a dedicated sandbox database and a migration-owner connection. Named credentials permanently exclude a tenant from pruning. Dry-run selection is the default.
 - **Consequence:** Ordinary API roles cannot perform retention. Maintenance serializes against demo creation and temporarily locks protected tables while deleting tenant-scoped rows. PostgreSQL rolls back the deletes and trigger changes together on failure.
 
+## ADR-014: Index the posted transfer window used for reconciliation
+
+- **Status:** Accepted
+- **Context:** Statement matching reads transfers by explicit reference or by the statement's time window. The tenant-only index can read a tenant's entire history to find a small window.
+- **Decision:** Add a partial index on tenant and completion time for transfers with a journal. Preserve the existing candidate query and its inclusive boundaries. Measure the same query and confirm the candidate IDs before and after migration.
+- **Tradeoff:** Posting pays one extra index write. The transactional index build briefly blocks transfer writes, so schedule the migration for a quiet window on a populated database.
+
 ## ADR template
 
 ### ADR-NNN: Decision title

@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+services:
+  - type: web
+    name: proof-payment-ops
+    runtime: docker
+    plan: free
+    autoDeployTrigger: "off"
+    healthCheckPath: /ready
+    envVars:
+      - key: PROOF_ENVIRONMENT
+        value: sandbox
+      - key: PROOF_DATABASE_URL
+        sync: false
+      - key: PROOF_ADMISSION_SECRET
+        generateValue: true
+      - key: PROOF_SIMULATED_PROVIDER_SECRET
+        generateValue: true

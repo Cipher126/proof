@@ -54,4 +54,4 @@ Work in order. Do not expand later milestones while an earlier milestone lacks i
 - Threat model, runbooks, telemetry dashboards, load and fault reports, architecture diagrams, public case study, and hosted demo.
 - Honest limitations and architectural tradeoffs.
 
-**Evidence:** The local image includes Prometheus metrics, a Grafana dashboard, optional OTLP tracing, named scoped credentials, sandbox admission caps, and opt-in retention. The hosted Compose profile and deployment guide are included. A publicly reachable deployment and live verification with the chosen host, collector, and receiver remain pending.
+**Evidence:** The local image includes Prometheus metrics, a Grafana dashboard, optional OTLP tracing, named scoped credentials, sandbox admission caps, and opt-in retention. The hosted Compose profile, Render Free Blueprint, and deployment guide are included. The [recovery drill](RECOVERY.md) verifies the packaged image, a database outage, and an isolated restore. Public deployment and live verification with the chosen host, collector, and receiver remain pending.

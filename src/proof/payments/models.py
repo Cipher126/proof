@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKeyConstraint, String, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKeyConstraint, Index, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proof.db import Base
@@ -63,6 +63,8 @@ class Transfer(Base):
         ),
         UniqueConstraint("tenant_id", "id", name="uq_transfer_tenant_id"),
         UniqueConstraint("tenant_id", "client_reference", name="uq_transfer_client_reference"),
+        Index("ix_transfers_posted_window", "tenant_id", "completed_at",
+              postgresql_where=text("journal_id IS NOT NULL")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

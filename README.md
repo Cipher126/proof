@@ -107,17 +107,24 @@ should be enabled only on a dedicated demo database.
 
 ## Engineering evidence
 
+On a local dataset of 40,000 fictional transfers, the reconciliation candidate
+lookup went from 17.89 ms to 0.28 ms median and returned the same results.
+The recovery drill restored the ledger checkpoint, applied the latest migration,
+and passed the end-to-end settlement scenario.
+
 - [Case study](docs/CASE_STUDY.md) · The incident, design tradeoffs, and test evidence.
 - [Architecture](docs/ARCHITECTURE.md) and [decision records](docs/DECISIONS.md) · Boundaries, transactions, and recovery.
 - [OpenAPI contract](docs/openapi.json) · Endpoints, request bodies, and response schemas.
 - [Threat model](docs/THREAT_MODEL.md) and [runbook](docs/RUNBOOK.md) · Access, evidence, and failure handling.
-- [Benchmark notes](docs/benchmarks/README.md) · A local synthetic contention run and its limits.
+- [Performance case study](docs/benchmarks/README.md) · PostgreSQL lock sampling and before-and-after query plans.
+- [Recovery drill](docs/RECOVERY.md) · Database outage, backup restore, and migration over existing records.
 - [Deployment guide](docs/DEPLOYMENT.md) and [roadmap](docs/ROADMAP.md) · Configuration and remaining hosted checks.
 
 ## Release scope
 
-The guided sandbox and local monitoring stack are runnable today. The repository
-includes hosted Docker configuration. A public deployment, a live external
-receiver, and a hosted trace collector still need environment-specific verification.
+The guided sandbox and local monitoring stack are runnable today. The Render
+Free Blueprint and Neon setup are documented. The packaged service passed the
+local deployment and recovery drill. Public hosting, a live external receiver,
+and a hosted trace collector still need verification in the target environment.
 
 [MIT license](LICENSE)

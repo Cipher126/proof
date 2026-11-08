@@ -6,7 +6,7 @@ import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from proof.errors import NotFoundError, ProofError, TenantBoundaryError
@@ -92,6 +92,20 @@ def _utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
+def candidate_transfers(
+    tenant_id: uuid.UUID, references: list[str], period_start: datetime, period_end: datetime,
+) -> Select[tuple[Transfer]]:
+    return select(Transfer).where(
+        Transfer.tenant_id == tenant_id,
+        or_(
+            Transfer.client_reference.in_(references),
+            Transfer.journal_id.is_not(None)
+            & (Transfer.completed_at >= period_start)
+            & (Transfer.completed_at <= period_end),
+        ),
+    )
+
+
 def reconcile_statement(
     session: Session, tenant_id: uuid.UUID, statement_id: uuid.UUID
 ) -> tuple[ReconciliationRun, list[ReconciliationFinding]]:
@@ -114,14 +128,8 @@ def reconcile_statement(
         .order_by(StatementLine.line_number)
     ).all()
     counts = Counter(line.client_reference for line in lines)
-    candidates = session.scalars(select(Transfer).where(
-        Transfer.tenant_id == tenant_id,
-        or_(
-            Transfer.client_reference.in_(list(counts)),
-            Transfer.journal_id.is_not(None)
-            & (Transfer.completed_at >= statement.period_start)
-            & (Transfer.completed_at <= statement.period_end),
-        ),
+    candidates = session.scalars(candidate_transfers(
+        tenant_id, list(counts), statement.period_start, statement.period_end,
     )).all()
     by_reference = {transfer.client_reference: transfer for transfer in candidates}
     seen: set[str] = set()
