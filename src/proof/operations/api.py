@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from proof.db import get_session
-from proof.ledger.api import active_tenant
+from proof.identity import TenantAccess, active_tenant
 from proof.ledger import service as ledger_service
 from proof.messaging.models import OutboxEvent
 from proof.payments import service as payment_service
@@ -39,7 +39,7 @@ def transfer_timeline(
     tenant_id: uuid.UUID,
     transfer_id: uuid.UUID,
     session: DbSession,
-    _: Annotated[uuid.UUID, Depends(active_tenant)],
+    _: Annotated[TenantAccess, Depends(active_tenant)],
 ) -> TransferTimeline:
     transfer = payment_service.get_transfer(session, tenant_id, transfer_id)
     journal = ledger_service.get_journal(session, tenant_id, transfer.journal_id)

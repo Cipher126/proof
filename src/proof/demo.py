@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from proof.db import get_session
+from proof.identity import issue_demo_credential
 from proof.ledger import service as ledger_service
 from proof.ledger.schemas import JournalCreate
 from proof.payments import service as payment_service
@@ -33,6 +34,7 @@ class DemoAccounts(BaseModel):
 
 class CanonicalScenarioRead(BaseModel):
     tenant_id: str
+    access_token: str
     tenant_name: str
     fictional: bool = True
     accounts: DemoAccounts
@@ -44,7 +46,9 @@ class CanonicalScenarioRead(BaseModel):
 
 
 @router.post("/scenarios/canonical", response_model=CanonicalScenarioRead)
-def run_canonical_scenario(session: Session = Depends(get_session)) -> CanonicalScenarioRead:
+def run_canonical_scenario(
+    response: Response, session: Session = Depends(get_session)
+) -> CanonicalScenarioRead:
     now = datetime.now(timezone.utc)
     tenant = ledger_service.create_tenant(
         session, f"Northstar Fictional Commerce {now.strftime('%H%M%S')}"
@@ -98,8 +102,11 @@ def run_canonical_scenario(session: Session = Depends(get_session)) -> Canonical
     )
     statement, _ = reconciliation_service.import_statement(session, tenant.id, statement_command)
     run, findings = reconciliation_service.reconcile_statement(session, tenant.id, statement.id)
+    token = issue_demo_credential(session, tenant.id)
+    response.headers["Cache-Control"] = "no-store"
     return CanonicalScenarioRead(
         tenant_id=str(tenant.id),
+        access_token=token,
         tenant_name=tenant.name,
         accounts=DemoAccounts(
             system=str(system.id),

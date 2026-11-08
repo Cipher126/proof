@@ -225,11 +225,13 @@ def resolve_finding(
     actor: str,
     command: FindingResolutionCreate,
 ) -> ReconciliationFinding:
-    finding = session.get(ReconciliationFinding, finding_id)
+    finding = session.scalar(
+        select(ReconciliationFinding)
+        .where(ReconciliationFinding.id == finding_id, ReconciliationFinding.tenant_id == tenant_id)
+        .with_for_update()
+    )
     if finding is None:
         raise NotFoundError("reconciliation finding")
-    if finding.tenant_id != tenant_id:
-        raise TenantBoundaryError()
     if finding.status == "resolved":
         return finding
     adjustment_id = None

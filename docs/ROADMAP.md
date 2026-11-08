@@ -54,4 +54,4 @@ Work in order. Do not expand later milestones while an earlier milestone lacks i
 - Threat model, runbooks, telemetry dashboards, load and fault reports, architecture diagrams, public case study, and hosted demo.
 - Honest limitations and architectural tradeoffs.
 
-**Exit evidence:** threat model, operations runbook, case study, container build, bounded benchmark, and portfolio narrative are in progress. A public hosted deployment remains future work.
+**Evidence:** the local container serves the dashboard after migration. The sandbox issues expiring, tenant-scoped credentials and attributes resolution audits to the authenticated credential. Public hosting still requires rate limits and demo-data retention.

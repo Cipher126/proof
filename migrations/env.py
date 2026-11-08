@@ -7,6 +7,7 @@ from sqlalchemy import engine_from_config, pool
 
 from proof.config import settings
 from proof.db import Base
+from proof import identity  # noqa: F401
 from proof.ledger import models  # noqa: F401
 from proof.messaging import models as messaging_models  # noqa: F401
 from proof.payments import models as payments_models  # noqa: F401

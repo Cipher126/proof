@@ -42,7 +42,7 @@ The operations console runs this story against the real backend; it is not a sta
 ## Honest limitations
 
 - All providers, tenants, funds, and incidents are fictional.
-- Demo tenant creation is intentionally open for portfolio use and is not a production access model.
+- Guided scenario creation is anonymous. Tenant access is scoped to the one-hour credential issued for that scenario. A public instance needs rate limits and retention for disposable scenarios.
 - Provider signing uses one development secret; production requires per-tenant secret rotation.
 - The outbox currently publishes to a local demonstration sink rather than an external broker.
 - Authentication, RBAC, durable file storage, and dual approval are future production-hardening work.

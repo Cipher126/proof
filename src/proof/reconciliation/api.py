@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy.orm import Session
 
 from proof.db import get_session
-from proof.ledger.api import active_tenant
+from proof.errors import ProofError
+from proof.identity import TenantAccess, active_tenant, require_development
 from proof.reconciliation import service
 from proof.reconciliation.schemas import (
     FindingRead,
@@ -26,12 +27,13 @@ DbSession = Annotated[Session, Depends(get_session)]
     "/tenants/{tenant_id}/settlements/statements",
     response_model=StatementImportResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_development)],
 )
 def import_statement(
     tenant_id: uuid.UUID,
     payload: StatementImportCreate,
     session: DbSession,
-    _: Annotated[uuid.UUID, Depends(active_tenant)],
+    _: Annotated[TenantAccess, Depends(active_tenant)],
 ) -> StatementImportResponse:
     statement, duplicate = service.import_statement(session, tenant_id, payload)
     return StatementImportResponse(
@@ -42,12 +44,13 @@ def import_statement(
 @router.post(
     "/tenants/{tenant_id}/settlements/statements/{statement_id}/reconcile",
     response_model=ReconciliationRunRead,
+    dependencies=[Depends(require_development)],
 )
 def reconcile_statement(
     tenant_id: uuid.UUID,
     statement_id: uuid.UUID,
     session: DbSession,
-    _: Annotated[uuid.UUID, Depends(active_tenant)],
+    _: Annotated[TenantAccess, Depends(active_tenant)],
 ) -> ReconciliationRunRead:
     run, findings = service.reconcile_statement(session, tenant_id, statement_id)
     result = ReconciliationRunRead.model_validate(run)
@@ -65,9 +68,12 @@ def resolve_finding(
     finding_id: uuid.UUID,
     payload: FindingResolutionCreate,
     session: DbSession,
-    operator_id: Annotated[str, Header(alias="X-Operator-ID")],
-    _: Annotated[uuid.UUID, Depends(active_tenant)],
+    access: Annotated[TenantAccess, Depends(active_tenant)],
+    operator_id: Annotated[str | None, Header(alias="X-Operator-ID")] = None,
 ) -> FindingRead:
+    actor = access.audit_actor or operator_id
+    if actor is None or not 1 <= len(actor.strip()) <= 160:
+        raise ProofError("invalid_operator", "a valid operator identity is required")
     return FindingRead.model_validate(
-        service.resolve_finding(session, tenant_id, finding_id, operator_id, payload)
+        service.resolve_finding(session, tenant_id, finding_id, actor, payload)
     )

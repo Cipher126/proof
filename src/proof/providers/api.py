@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy.orm import Session
 
 from proof.db import get_session
-from proof.ledger.api import active_tenant
+from proof.identity import TenantAccess, active_tenant, require_development
 from proof.providers import service
 from proof.providers.schemas import (
     DemoProviderEventCreate,
@@ -22,6 +22,7 @@ DbSession = Annotated[Session, Depends(get_session)]
 @router.post(
     "/tenants/{tenant_id}/providers/simulated/webhooks",
     response_model=ProviderEventResponse,
+    dependencies=[Depends(require_development)],
 )
 async def receive_simulated_webhook(
     tenant_id: uuid.UUID,
@@ -30,7 +31,7 @@ async def receive_simulated_webhook(
     event_id: Annotated[str, Header(alias="X-Proof-Event-ID")],
     timestamp: Annotated[str, Header(alias="X-Proof-Timestamp")],
     signature: Annotated[str, Header(alias="X-Proof-Signature")],
-    _: Annotated[uuid.UUID, Depends(active_tenant)],
+    _: Annotated[TenantAccess, Depends(active_tenant)],
 ) -> ProviderEventResponse:
     event, duplicate = service.ingest_webhook(
         session,
@@ -48,12 +49,13 @@ async def receive_simulated_webhook(
 @router.post(
     "/tenants/{tenant_id}/demo/provider-events",
     response_model=ProviderEventResponse,
+    dependencies=[Depends(require_development)],
 )
 def simulate_provider_event(
     tenant_id: uuid.UUID,
     payload: DemoProviderEventCreate,
     session: DbSession,
-    _: Annotated[uuid.UUID, Depends(active_tenant)],
+    _: Annotated[TenantAccess, Depends(active_tenant)],
 ) -> ProviderEventResponse:
     event, duplicate = service.build_demo_event(
         session, tenant_id, payload.client_reference, payload.scenario

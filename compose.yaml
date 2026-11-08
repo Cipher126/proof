@@ -12,6 +12,7 @@ services:
     image: proof:local
     build: .
     environment:
+      PROOF_ENVIRONMENT: sandbox
       PROOF_DATABASE_URL: postgresql+psycopg://proof:proof@database:5432/proof
     ports:
       - "127.0.0.1:18080:8000"

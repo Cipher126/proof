@@ -54,7 +54,7 @@ def clean_database(isolated_schema):
     with SessionLocal.begin() as session:
         session.execute(
             text(
-                "TRUNCATE audit_events, reconciliation_findings, reconciliation_runs, "
+                "TRUNCATE demo_credentials, audit_events, reconciliation_findings, reconciliation_runs, "
                 "statement_lines, statement_imports, provider_events, outbox_events, "
                 "idempotency_records, transfers, "
                 "journal_entries, journal_transactions, accounts, tenants"

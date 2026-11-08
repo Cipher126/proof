@@ -18,6 +18,7 @@ COPY --from=dashboard-build /ui/dist ./dashboard/dist
 COPY alembic.ini ./
 COPY migrations ./migrations
 ENV PROOF_DASHBOARD_DIR=/app/dashboard/dist
+ENV PROOF_ENVIRONMENT=sandbox
 
 USER 65532:65532
 EXPOSE 8000

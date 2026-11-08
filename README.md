@@ -20,10 +20,15 @@ The [API contract](http://127.0.0.1:18080/docs) is available in the same process
 Compose applies migrations before starting the API. Run `docker compose stop` to
 stop the services and retain the demo database.
 
-This configuration is a loopback-only sandbox. Tenant and operator headers are demo
-identifiers. See [the threat model](docs/THREAT_MODEL.md) for the public-hosting gates.
+This configuration binds to loopback. Each guided incident issues a tenant-scoped
+bearer credential that expires after one hour. The browser keeps it in memory,
+so refreshing the page starts a new session. See [the threat model](docs/THREAT_MODEL.md)
+for the public-hosting gates.
 
 ## Run from source
+
+The source workflow defaults to development mode, which enables fixture and
+integration endpoints. Use it on localhost with fictional data.
 
 ```powershell
 docker compose up -d database

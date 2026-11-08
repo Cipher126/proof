@@ -56,6 +56,16 @@ Record consequential and difficult-to-reverse choices here before implementation
 - **Consequences:** Retries remain deterministic across process restarts. Records require retention policy and careful response evolution.
 - **Revisit when:** Retention volume or multi-region command routing requires a different coordination model.
 
+## ADR-007: Issue a short-lived credential for each guided demo tenant
+
+- **Status:** Accepted
+- **Context:** An anonymous visitor needs to inspect and resolve their fictional incident without accessing another visitor's records.
+- **Decision:** Return one random bearer credential when a scenario is created. Store only its SHA-256 verifier, public ID, tenant and expiry. Require it for tenant routes in Compose and derive the audit actor from its public ID. Keep header-based fixtures confined to the explicit local development mode.
+- **Alternatives:** Public tenant IDs as credentials, or an account and login flow for the guided demo.
+- **Consequences:** Each visitor can operate their own fictional tenant without signing up. Refreshing the browser loses the in-memory credential. A hosted deployment still needs resource limits and a demo-data retention policy.
+- **Evidence:** Reject missing, invalid, expired and cross-tenant credentials. Resolve the incident with a valid credential and verify that spoofed operator headers do not affect audit attribution.
+- **Revisit when:** Real users need long-lived identities, separately delegated roles, or account recovery.
+
 ## ADR template
 
 ### ADR-NNN: Decision title

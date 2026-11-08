@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -13,6 +13,7 @@ type Finding = {
 
 type Scenario = {
   tenant_id: string;
+  access_token: string;
   tenant_name: string;
   fictional: boolean;
   accounts: { system: string; merchant: string; customer: string; provider_fee: string };
@@ -63,10 +64,7 @@ function Icon({ name }: { name: "pulse" | "ledger" | "route" | "shield" }) {
 }
 
 function App() {
-  const [scenario, setScenario] = useState<Scenario | null>(() => {
-    const saved = localStorage.getItem("proof-scenario");
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [scenario, setScenario] = useState<Scenario | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -81,14 +79,10 @@ function App() {
   async function refreshTimeline(next: Scenario) {
     const response = await fetch(
       `${API}/v1/tenants/${next.tenant_id}/operations/transfers/${next.transfer.id}/timeline`,
-      { headers: { "X-Tenant-ID": next.tenant_id } },
+      { headers: { Authorization: `Bearer ${next.access_token}` } },
     );
     if (response.ok) setTimeline((await response.json()).items);
   }
-
-  useEffect(() => {
-    if (scenario) refreshTimeline(scenario).catch(() => undefined);
-  }, []);
 
   async function runIncident() {
     setBusy(true); setError("");
@@ -97,7 +91,7 @@ function App() {
       if (!response.ok) throw new Error("Could not create the guided incident.");
       const next: Scenario = await response.json();
       setScenario(next);
-      localStorage.setItem("proof-scenario", JSON.stringify(next));
+      setTimeline([]);
       await refreshTimeline(next);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unexpected failure");
@@ -114,8 +108,7 @@ function App() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Tenant-ID": scenario.tenant_id,
-            "X-Operator-ID": "portfolio-operator@proof.demo",
+            Authorization: `Bearer ${scenario.access_token}`,
           },
           body: JSON.stringify({
             resolution: "adjusted",
@@ -128,10 +121,11 @@ function App() {
           }),
         },
       );
+      if (response.status === 401) throw new Error("This incident expired. Run a fresh incident.");
       if (!response.ok) throw new Error("The controlled adjustment could not be posted.");
       const updated: Finding = await response.json();
       const next = { ...scenario, findings: [updated, ...scenario.findings.slice(1)] };
-      setScenario(next); localStorage.setItem("proof-scenario", JSON.stringify(next));
+      setScenario(next);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unexpected failure");
     } finally { setBusy(false); }
