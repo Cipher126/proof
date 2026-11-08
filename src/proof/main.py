@@ -1,18 +1,27 @@
 from __future__ import annotations
 
 import logging
+import os
 import uuid
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from proof.config import settings
 from proof.db import SessionLocal
 from proof.errors import ProofError
 from proof.ledger.api import router as ledger_router
+from proof.payments.api import router as payments_router
+from proof.providers.api import router as providers_router
+from proof.operations.api import router as operations_router
+from proof.reconciliation.api import router as reconciliation_router
+from proof.demo import router as demo_router
 
 logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("proof")
@@ -23,6 +32,17 @@ app = FastAPI(
     description="Fictional payment ledger and reconciliation platform. No real money is processed.",
 )
 app.include_router(ledger_router)
+app.include_router(payments_router)
+app.include_router(providers_router)
+app.include_router(operations_router)
+app.include_router(reconciliation_router)
+app.include_router(demo_router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.middleware("http")
@@ -64,10 +84,21 @@ def health() -> dict[str, str]:
 
 @app.get("/ready", tags=["operations"])
 def ready() -> dict[str, str]:
-    with SessionLocal() as session:
-        session.execute(text("SELECT 1"))
+    try:
+        with SessionLocal() as session:
+            session.execute(text("SELECT 1"))
+    except OperationalError:
+        raise ProofError("database_unavailable", "database is unavailable", 503) from None
     return {"status": "ready"}
 
 
 def run() -> None:
     uvicorn.run("proof.main:app", host="127.0.0.1", port=8000, reload=False)
+
+
+dashboard = Path(os.getenv(
+    "PROOF_DASHBOARD_DIR",
+    str(Path(__file__).resolve().parents[2] / "dashboard" / "dist"),
+))
+if dashboard.exists():
+    app.mount("/", StaticFiles(directory=dashboard, html=True), name="dashboard")

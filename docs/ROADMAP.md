@@ -11,47 +11,47 @@ Work in order. Do not expand later milestones while an earlier milestone lacks i
 
 **Exit evidence:** project tooling, PostgreSQL Compose service, initial Alembic migration, API shell, CI workflow, tests, and OpenAPI export are implemented. A clean CI run remains required after repository publication.
 
-## Milestone 1 — Verifiable ledger 🚧
+## Milestone 1 — Verifiable ledger ✅
 
 - Tenants, currencies, accounts, journals, entries, and balance queries.
 - Atomic posting service with database constraints.
 - Reversals and traceable references.
 - Property and concurrency tests.
 
-**Exit evidence:** atomic posting, derived balances, PostgreSQL balance/immutability triggers, reversals, and API tests are implemented. PostgreSQL integration and concurrency verification remain before this milestone is complete.
+**Exit evidence:** atomic posting, derived balances, PostgreSQL balance/immutability triggers, reversals, API tests, and direct PostgreSQL invariant tests are implemented and passing.
 
-## Milestone 2 — Idempotent payment commands
+## Milestone 2 — Idempotent payment commands (transfer slice verified)
 
 - Transfers, holds, fees, refunds, explicit state transitions, and idempotency records.
 - Safe concurrent spending rules.
 - Transactional outbox written with financial state.
 
-**Exit evidence:** duplicate, conflicting, racing, and interrupted requests have documented deterministic outcomes.
+**Evidence:** PostgreSQL tests cover racing retries and competing spends. Holds, refunds, the full payment state machine, and crash-injection evidence remain open.
 
-## Milestone 3 — Provider evidence and failures
+## Milestone 3 — Provider evidence and failures (demo slice verified)
 
 - Simulated provider adapter, signed webhooks, replay defense, retries, and out-of-order handling.
 - Worker processing, dead letters, causal timelines, and failure injection.
 
-**Exit evidence:** the same deterministic scenario survives duplicates, delays, invalid signatures, and worker restarts.
+**Evidence:** API tests verify signed evidence, duplicate handling, and classification. PostgreSQL tests verify local outbox completion and dead lettering. The worker runs bounded batches against a local sink. External delivery and crash recovery remain open.
 
-## Milestone 4 — Settlement and reconciliation
+## Milestone 4 — Settlement and reconciliation (demo slice verified)
 
 - Statement import, evidence hashing, deterministic matching, discrepancy taxonomy, reruns, and resolution workflows.
 - Adjustment and reversal accounting.
 
-**Exit evidence:** canonical mismatches are detected, explained, resolved, and safely reproduced on rerun.
+**Evidence:** the guided demo imports a normalized JSON statement, reconciles it, and posts an audited adjustment. Settlement batch lifecycle, timing discrepancy rules, and concurrent import and resolution tests remain open.
 
-## Milestone 5 — Operations console and guided demo
+## Milestone 5 — Operations console and guided demo ✅
 
 - Money-flow view, ledger explorer, causal timeline, settlement view, discrepancy queue, and scenario controls.
 - Recruiter-oriented guided walkthrough with explicit fictional-data labeling.
 
-**Exit evidence:** a reviewer can complete the canonical story without terminal access or undocumented setup.
+**Exit evidence:** the TypeScript console builds successfully and browser QA at 1440×1000 verified the real one-click incident, evidence views, causal timeline, and controlled resolution without terminal access.
 
-## Milestone 6 — Production evidence and portfolio packaging
+## Milestone 6 — Production evidence and portfolio packaging 🚧
 
 - Threat model, runbooks, telemetry dashboards, load and fault reports, architecture diagrams, public case study, and hosted demo.
 - Honest limitations and architectural tradeoffs.
 
-**Exit evidence:** reproducible deployment, working live demo, clear source documentation, and a two-minute portfolio narrative.
+**Exit evidence:** threat model, operations runbook, case study, container build, bounded benchmark, and portfolio narrative are in progress. A public hosted deployment remains future work.

@@ -23,7 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
       - run: uv sync --dev
+      - run: npm ci
+        working-directory: dashboard
+      - run: npm run build
+        working-directory: dashboard
       - run: uv run alembic upgrade head
       - run: uv run pytest
+      - run: uv run pytest -m integration
       - run: uv run python scripts/export_openapi.py

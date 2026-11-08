@@ -20,6 +20,7 @@ dev = [
 
 [project.scripts]
 proof-api = "proof.main:run"
+proof-worker = "proof.messaging.worker:run"
 
 [build-system]
 requires = ["hatchling"]
@@ -29,8 +30,9 @@ build-backend = "hatchling.build"
 packages = ["src/proof"]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q -m 'not integration'"
 testpaths = ["tests"]
+markers = ["integration: requires the local Proof PostgreSQL service"]
 
 [tool.ruff]
 line-length = 100

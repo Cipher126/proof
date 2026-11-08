@@ -372,6 +372,576 @@
         }
       }
     },
+    "/v1/tenants/{tenant_id}/transfers": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Create Transfer",
+        "operationId": "create_transfer_v1_tenants__tenant_id__transfers_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenant_id}/transfers/{transfer_id}": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Get Transfer",
+        "operationId": "get_transfer_v1_tenants__tenant_id__transfers__transfer_id__get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "transfer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Transfer Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenant_id}/providers/simulated/webhooks": {
+      "post": {
+        "tags": [
+          "provider evidence"
+        ],
+        "summary": "Receive Simulated Webhook",
+        "operationId": "receive_simulated_webhook_v1_tenants__tenant_id__providers_simulated_webhooks_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "X-Proof-Event-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Proof-Event-Id"
+            }
+          },
+          {
+            "name": "X-Proof-Timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Proof-Timestamp"
+            }
+          },
+          {
+            "name": "X-Proof-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Proof-Signature"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderEventResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenant_id}/demo/provider-events": {
+      "post": {
+        "tags": [
+          "provider evidence"
+        ],
+        "summary": "Simulate Provider Event",
+        "operationId": "simulate_provider_event_v1_tenants__tenant_id__demo_provider_events_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoProviderEventCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderEventResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenant_id}/operations/transfers/{transfer_id}/timeline": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Transfer Timeline",
+        "operationId": "transfer_timeline_v1_tenants__tenant_id__operations_transfers__transfer_id__timeline_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "transfer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Transfer Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferTimeline"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenant_id}/settlements/statements": {
+      "post": {
+        "tags": [
+          "reconciliation"
+        ],
+        "summary": "Import Statement",
+        "operationId": "import_statement_v1_tenants__tenant_id__settlements_statements_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementImportCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenant_id}/settlements/statements/{statement_id}/reconcile": {
+      "post": {
+        "tags": [
+          "reconciliation"
+        ],
+        "summary": "Reconcile Statement",
+        "operationId": "reconcile_statement_v1_tenants__tenant_id__settlements_statements__statement_id__reconcile_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "statement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Statement Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationRunRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tenants/{tenant_id}/reconciliation/findings/{finding_id}/resolve": {
+      "post": {
+        "tags": [
+          "reconciliation"
+        ],
+        "summary": "Resolve Finding",
+        "operationId": "resolve_finding_v1_tenants__tenant_id__reconciliation_findings__finding_id__resolve_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          },
+          {
+            "name": "X-Operator-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Operator-Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindingResolutionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/demo/scenarios/canonical": {
+      "post": {
+        "tags": [
+          "guided demo"
+        ],
+        "summary": "Run Canonical Scenario",
+        "operationId": "run_canonical_scenario_v1_demo_scenarios_canonical_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanonicalScenarioRead"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -438,6 +1008,11 @@
             "maxLength": 3,
             "minLength": 3,
             "title": "Currency"
+          },
+          "allow_negative": {
+            "type": "boolean",
+            "title": "Allow Negative",
+            "default": false
           }
         },
         "type": "object",
@@ -467,6 +1042,10 @@
             "type": "string",
             "title": "Currency"
           },
+          "allow_negative": {
+            "type": "boolean",
+            "title": "Allow Negative"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -479,6 +1058,7 @@
           "tenant_id",
           "name",
           "currency",
+          "allow_negative",
           "created_at"
         ],
         "title": "AccountRead"
@@ -506,6 +1086,112 @@
           "balance_minor"
         ],
         "title": "BalanceRead"
+      },
+      "CanonicalScenarioRead": {
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id"
+          },
+          "tenant_name": {
+            "type": "string",
+            "title": "Tenant Name"
+          },
+          "fictional": {
+            "type": "boolean",
+            "title": "Fictional",
+            "default": true
+          },
+          "accounts": {
+            "$ref": "#/components/schemas/DemoAccounts"
+          },
+          "transfer": {
+            "$ref": "#/components/schemas/TransferRead"
+          },
+          "provider_event": {
+            "$ref": "#/components/schemas/ProviderEventRead"
+          },
+          "statement": {
+            "$ref": "#/components/schemas/StatementImportRead"
+          },
+          "reconciliation_run_id": {
+            "type": "string",
+            "title": "Reconciliation Run Id"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingRead"
+            },
+            "type": "array",
+            "title": "Findings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tenant_id",
+          "tenant_name",
+          "accounts",
+          "transfer",
+          "provider_event",
+          "statement",
+          "reconciliation_run_id",
+          "findings"
+        ],
+        "title": "CanonicalScenarioRead"
+      },
+      "DemoAccounts": {
+        "properties": {
+          "system": {
+            "type": "string",
+            "title": "System"
+          },
+          "merchant": {
+            "type": "string",
+            "title": "Merchant"
+          },
+          "customer": {
+            "type": "string",
+            "title": "Customer"
+          },
+          "provider_fee": {
+            "type": "string",
+            "title": "Provider Fee"
+          }
+        },
+        "type": "object",
+        "required": [
+          "system",
+          "merchant",
+          "customer",
+          "provider_fee"
+        ],
+        "title": "DemoAccounts"
+      },
+      "DemoProviderEventCreate": {
+        "properties": {
+          "client_reference": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Client Reference"
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "duplicate",
+              "out_of_order",
+              "amount_mismatch"
+            ],
+            "title": "Scenario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_reference",
+          "scenario"
+        ],
+        "title": "DemoProviderEventCreate"
       },
       "EntryCreate": {
         "properties": {
@@ -560,6 +1246,211 @@
           "currency"
         ],
         "title": "EntryRead"
+      },
+      "FindingRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "statement_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement Line Id"
+          },
+          "transfer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "actual": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "resolved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "resolution_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Reason"
+          },
+          "adjustment_journal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Journal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "run_id",
+          "statement_line_id",
+          "transfer_id",
+          "kind",
+          "status",
+          "explanation",
+          "expected",
+          "actual",
+          "created_at",
+          "resolved_at",
+          "resolved_by",
+          "resolution",
+          "resolution_reason",
+          "adjustment_journal_id"
+        ],
+        "title": "FindingRead"
+      },
+      "FindingResolutionCreate": {
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "acknowledged",
+              "adjusted"
+            ],
+            "title": "Resolution"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Reason"
+          },
+          "adjustment_description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Description"
+          },
+          "adjustment_entries": {
+            "items": {
+              "$ref": "#/components/schemas/EntryCreate"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Adjustment Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resolution",
+          "reason"
+        ],
+        "title": "FindingResolutionCreate"
       },
       "HTTPValidationError": {
         "properties": {
@@ -681,6 +1572,170 @@
         ],
         "title": "JournalRead"
       },
+      "ProviderEventRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "provider_transfer_id": {
+            "type": "string",
+            "title": "Provider Transfer Id"
+          },
+          "client_reference": {
+            "type": "string",
+            "title": "Client Reference"
+          },
+          "amount_minor": {
+            "type": "integer",
+            "title": "Amount Minor"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "provider_status": {
+            "type": "string",
+            "title": "Provider Status"
+          },
+          "classification": {
+            "type": "string",
+            "title": "Classification"
+          },
+          "transfer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Id"
+          },
+          "provider_timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Provider Timestamp"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Received At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "provider",
+          "event_id",
+          "event_type",
+          "provider_transfer_id",
+          "client_reference",
+          "amount_minor",
+          "currency",
+          "provider_status",
+          "classification",
+          "transfer_id",
+          "provider_timestamp",
+          "received_at"
+        ],
+        "title": "ProviderEventRead"
+      },
+      "ProviderEventResponse": {
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/ProviderEventRead"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "title": "Duplicate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event",
+          "duplicate"
+        ],
+        "title": "ProviderEventResponse"
+      },
+      "ReconciliationRunRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "statement_import_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Statement Import Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingRead"
+            },
+            "type": "array",
+            "title": "Findings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "statement_import_id",
+          "status",
+          "started_at",
+          "completed_at"
+        ],
+        "title": "ReconciliationRunRead"
+      },
       "ReversalCreate": {
         "properties": {
           "reference": {
@@ -702,6 +1757,176 @@
           "reason"
         ],
         "title": "ReversalCreate"
+      },
+      "StatementImportCreate": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Provider"
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Filename"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Period End"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLineCreate"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "filename",
+          "period_start",
+          "period_end",
+          "lines"
+        ],
+        "title": "StatementImportCreate"
+      },
+      "StatementImportRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Period End"
+          },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "imported_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Imported At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "provider",
+          "filename",
+          "content_hash",
+          "period_start",
+          "period_end",
+          "row_count",
+          "imported_at"
+        ],
+        "title": "StatementImportRead"
+      },
+      "StatementImportResponse": {
+        "properties": {
+          "statement": {
+            "$ref": "#/components/schemas/StatementImportRead"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "title": "Duplicate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "statement",
+          "duplicate"
+        ],
+        "title": "StatementImportResponse"
+      },
+      "StatementLineCreate": {
+        "properties": {
+          "provider_reference": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Provider Reference"
+          },
+          "client_reference": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Client Reference"
+          },
+          "amount_minor": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Amount Minor"
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "submitted",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider_reference",
+          "client_reference",
+          "amount_minor",
+          "currency",
+          "status",
+          "occurred_at"
+        ],
+        "title": "StatementLineCreate"
       },
       "TenantCreate": {
         "properties": {
@@ -742,6 +1967,167 @@
           "created_at"
         ],
         "title": "TenantRead"
+      },
+      "TimelineItem": {
+        "properties": {
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occurred_at",
+          "kind",
+          "summary",
+          "data"
+        ],
+        "title": "TimelineItem"
+      },
+      "TransferCreate": {
+        "properties": {
+          "client_reference": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Client Reference"
+          },
+          "source_account_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Account Id"
+          },
+          "destination_account_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Destination Account Id"
+          },
+          "amount_minor": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Amount Minor"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_reference",
+          "source_account_id",
+          "destination_account_id",
+          "amount_minor",
+          "description"
+        ],
+        "title": "TransferCreate"
+      },
+      "TransferRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "client_reference": {
+            "type": "string",
+            "title": "Client Reference"
+          },
+          "source_account_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Account Id"
+          },
+          "destination_account_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Destination Account Id"
+          },
+          "amount_minor": {
+            "type": "integer",
+            "title": "Amount Minor"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "journal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Journal Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tenant_id",
+          "client_reference",
+          "source_account_id",
+          "destination_account_id",
+          "amount_minor",
+          "currency",
+          "status",
+          "journal_id",
+          "created_at",
+          "completed_at"
+        ],
+        "title": "TransferRead"
+      },
+      "TransferTimeline": {
+        "properties": {
+          "transfer_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Transfer Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transfer_id",
+          "items"
+        ],
+        "title": "TransferTimeline"
       },
       "ValidationError": {
         "properties": {

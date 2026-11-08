@@ -37,6 +37,25 @@ Record consequential and difficult-to-reverse choices here before implementation
 - **Consequences:** Repeatable demonstrations and failure testing; adapters must remain plausible and contract-driven.
 - **Revisit when:** A sandbox integration adds hiring value without weakening reliability or requiring sensitive production access.
 
+## ADR-005: Serialize protected spending on the source account
+
+- **Status:** Accepted
+- **Context:** Two concurrent transfers must not both observe and spend the same available funds.
+- **Decision:** Lock involved account rows in deterministic identifier order, derive the source balance from posted entries inside that transaction, enforce the account's negative-balance policy, and commit the transfer, journal, idempotency outcome, and outbox event atomically.
+- **Alternatives:** Application-only balance checks; serializable isolation for every financial command; a mutable balance as the sole authority.
+- **Consequences:** Correctness is straightforward and measurable. A highly contended source account can become a serialization point, while derived-balance queries will eventually need a verified projection optimization.
+- **Evidence:** PostgreSQL concurrency tests must prove that competing transfers cannot overspend.
+- **Revisit when:** Measured lock waits or balance-query costs exceed the target workload.
+
+## ADR-006: Persist business idempotency with command effects
+
+- **Status:** Accepted
+- **Context:** Clients retry timed-out requests and may reuse a key with different content.
+- **Decision:** Bind each idempotency key to tenant, operation, and a canonical request hash. Persist its resource outcome in the same database transaction as the financial effect and outbox event.
+- **Alternatives:** Cache-only keys; HTTP response caching; provider-generated deduplication.
+- **Consequences:** Retries remain deterministic across process restarts. Records require retention policy and careful response evolution.
+- **Revisit when:** Retention volume or multi-region command routing requires a different coordination model.
+
 ## ADR template
 
 ### ADR-NNN: Decision title

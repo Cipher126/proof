@@ -50,7 +50,9 @@ def create_account(
     _: Annotated[uuid.UUID, Depends(active_tenant)],
 ) -> AccountRead:
     return AccountRead.model_validate(
-        service.create_account(session, tenant_id, payload.name, payload.currency)
+        service.create_account(
+            session, tenant_id, payload.name, payload.currency, payload.allow_negative
+        )
     )
 
 

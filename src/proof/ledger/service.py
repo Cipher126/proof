@@ -27,9 +27,20 @@ def require_tenant(session: Session, tenant_id: uuid.UUID) -> Tenant:
     return tenant
 
 
-def create_account(session: Session, tenant_id: uuid.UUID, name: str, currency: str) -> Account:
+def create_account(
+    session: Session,
+    tenant_id: uuid.UUID,
+    name: str,
+    currency: str,
+    allow_negative: bool = False,
+) -> Account:
     require_tenant(session, tenant_id)
-    account = Account(tenant_id=tenant_id, name=name.strip(), currency=currency)
+    account = Account(
+        tenant_id=tenant_id,
+        name=name.strip(),
+        currency=currency,
+        allow_negative=allow_negative,
+    )
     session.add(account)
     session.commit()
     session.refresh(account)
@@ -51,6 +62,7 @@ def post_journal(
     command: JournalCreate,
     *,
     reverses_id: uuid.UUID | None = None,
+    commit: bool = True,
 ) -> JournalTransaction:
     require_tenant(session, tenant_id)
     account_ids = sorted({entry.account_id for entry in command.entries}, key=str)
@@ -94,7 +106,10 @@ def post_journal(
     session.flush()
     journal.status = "posted"
     journal.posted_at = datetime.now(timezone.utc)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     return get_journal(session, tenant_id, journal.id)
 
 

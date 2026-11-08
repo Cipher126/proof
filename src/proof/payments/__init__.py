@@ -1,0 +1,1 @@
+"""Idempotent payment command module."""

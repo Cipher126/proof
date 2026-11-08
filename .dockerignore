@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+.env
+.env.*
+**/__pycache__
+**/*.pyc
+.pytest_cache
+dashboard/node_modules
+dashboard/dist
+**/*.tsbuildinfo
+docs/benchmarks/*.json

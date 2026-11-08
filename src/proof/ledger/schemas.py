@@ -20,6 +20,7 @@ class TenantRead(BaseModel):
 class AccountCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     currency: str = Field(min_length=3, max_length=3)
+    allow_negative: bool = False
 
     @field_validator("currency")
     @classmethod
@@ -35,6 +36,7 @@ class AccountRead(BaseModel):
     tenant_id: uuid.UUID
     name: str
     currency: str
+    allow_negative: bool
     created_at: datetime
 
 

@@ -1,12 +1,23 @@
+FROM node:24-alpine AS dashboard-build
+WORKDIR /ui
+COPY dashboard/package.json dashboard/package-lock.json ./
+RUN npm ci
+COPY dashboard/ ./
+RUN npm run build
+
 FROM python:3.13-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN pip install --no-cache-dir uv
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
-RUN uv sync --no-dev --no-editable
+RUN uv sync --frozen --no-dev --no-editable
+COPY --from=dashboard-build /ui/dist ./dashboard/dist
+COPY alembic.ini ./
+COPY migrations ./migrations
+ENV PROOF_DASHBOARD_DIR=/app/dashboard/dist
 
 USER 65532:65532
 EXPOSE 8000

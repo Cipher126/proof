@@ -7,3 +7,6 @@ __pycache__/
 dist/
 htmlcov/
 .coverage
+dashboard/node_modules/
+dashboard/dist/
+*.tsbuildinfo
