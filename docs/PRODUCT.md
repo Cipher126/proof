@@ -26,7 +26,7 @@ Proof is a sandbox payment-operations platform that records money movement in an
 1. A merchant initiates a NGN 25,000 transfer with an idempotency key.
 2. Proof atomically writes the transfer, balanced journal entries, and an outbox event.
 3. The client retries the same request and receives the original result.
-4. A simulated provider sends duplicate and out-of-order callbacks; Proof records them but applies the valid transition once.
+4. A simulated provider sends duplicate and out-of-order callbacks. Proof reuses the stored duplicate evidence and records the out-of-order callback without changing the transfer.
 5. A statement import intentionally reports NGN 24,750.
 6. Reconciliation flags a NGN 250 fee mismatch with evidence from both sides.
 7. An operator resolves the discrepancy through a controlled adjustment that creates new entries and an audit event.

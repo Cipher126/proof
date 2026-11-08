@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import platform
 import statistics
 import threading
@@ -15,19 +16,23 @@ import httpx
 
 def percentile(values: list[float], fraction: float) -> float:
     ordered = sorted(values)
-    index = min(len(ordered) - 1, max(0, int(len(ordered) * fraction) - 1))
+    index = math.ceil(len(ordered) * fraction) - 1
     return ordered[index]
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a bounded local Proof API benchmark")
-    parser.add_argument("--base-url", default="http://127.0.0.1:18000")
+    parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--requests", type=int, default=100)
     parser.add_argument("--concurrency", type=int, default=8)
-    parser.add_argument("--output", default="docs/benchmarks/local-latest.json")
+    parser.add_argument("--output", default="artifacts/benchmarks/latest.json")
     args = parser.parse_args()
+    if not 1 <= args.concurrency <= min(args.requests, 32) or args.requests > 10_000:
+        parser.error("use 1–10,000 requests and concurrency between 1 and min(requests, 32)")
     with httpx.Client(base_url=args.base_url, timeout=30) as client:
-        tenant = client.post("/v1/demo/tenants", json={"name": "Bounded benchmark tenant"}).json()
+        created = client.post("/v1/demo/tenants", json={"name": "Bounded benchmark tenant"})
+        created.raise_for_status()
+        tenant = created.json()
         tenant_id = tenant["id"]
         headers = {"X-Tenant-ID": tenant_id}
 
@@ -113,6 +118,8 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
+    if statuses != {"201": args.requests}:
+        parser.exit(1, "Some transfer requests failed. See the benchmark report.\n")
 
 
 if __name__ == "__main__":

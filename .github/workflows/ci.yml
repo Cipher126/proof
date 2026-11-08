@@ -1,5 +1,8 @@
 name: ci
 
+permissions:
+  contents: read
+
 on:
   push:
   pull_request:
@@ -28,12 +31,20 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
-      - run: uv sync --dev
+      - run: uv sync --frozen
       - run: npm ci
         working-directory: dashboard
       - run: npm run build
         working-directory: dashboard
       - run: uv run alembic upgrade head
-      - run: uv run pytest
-      - run: uv run pytest -m integration
-      - run: uv run python scripts/export_openapi.py
+      - run: uv run pytest -o addopts="" -q
+      - run: uv run python scripts/export_openapi.py --check
+      - name: Smoke-test the built demo
+        env:
+          PROOF_ENVIRONMENT: sandbox
+        run: |
+          uv run uvicorn proof.main:app --host 127.0.0.1 --port 18080 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --show-error --retry 10 --retry-connrefused http://127.0.0.1:18080/ready
+          uv run python scripts/smoke_demo.py

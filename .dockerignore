@@ -10,3 +10,4 @@ dashboard/node_modules
 dashboard/dist
 **/*.tsbuildinfo
 docs/benchmarks/*.json
+artifacts

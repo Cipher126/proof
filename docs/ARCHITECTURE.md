@@ -26,8 +26,8 @@ Simulated providers ─> webhook ingress               │
 
 ## Modules
 
-- **identity:** tenants, users, roles, API credentials, authorization.
-- **ledger:** accounts, journal transactions, entries, balance projections.
+- **identity:** tenants, named API credentials, roles, and authorization.
+- **ledger:** accounts, journal transactions, entries, and derived balances.
 - **payments:** transfers, holds, fees, refunds, and state machines.
 - **providers:** provider configuration, signed event ingestion, simulations, normalized evidence.
 - **settlement:** settlement batches and provider-statement imports.
@@ -49,7 +49,6 @@ Modules communicate through explicit application interfaces and domain events. T
 
 - Versioned REST API with OpenAPI as an exported, tested contract.
 - Opaque public identifiers; internal keys remain private.
-- Cursor pagination for changing operational collections.
 - Stable machine-readable error codes and request correlation IDs.
 - `Idempotency-Key` is required for financial command endpoints.
 - Webhook signatures include timestamp tolerance and replay defense.

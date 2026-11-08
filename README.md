@@ -2,97 +2,122 @@
 
 **Every cent accounted for.**
 
-Proof is a backend-first, fictional payment operations platform. Its first executable milestone is an immutable, tenant-scoped double-entry ledger whose balances can be reproduced from posted entries.
+Proof is a payment-ledger and reconciliation sandbox. It shows how a backend can
+keep its books balanced when clients retry, webhooks arrive out of order, and a
+provider reports a different settlement amount. All transfers and providers are fictional.
 
-Proof does not move real money and is not a payment processor.
+**Stack** · Python and FastAPI · PostgreSQL and Alembic · React and TypeScript · Docker Compose
 
-## Run the local demo
+## Run the demo
 
-With Docker Desktop running, open PowerShell in the project folder and run:
+From the project root, with Docker and Docker Compose running:
 
-```powershell
-docker compose up --build -d
+```bash
+docker compose up --build -d --wait
 ```
 
-Open [Proof](http://127.0.0.1:18080/) and click **Run demo**. Compare the
-₦25,000 transfer with the ₦24,750 provider statement, then choose
-**Review adjustment** and **Post adjustment**. Use **Ledger explorer** to
-compare the original and adjusting journals. **Event trail** shows the provider
-evidence, retry results, statement hash, and audit actor.
-The [API contract](http://127.0.0.1:18080/docs) is available in the same process.
-Compose applies migrations before starting the API. Run `docker compose stop` to
-stop the services and retain the demo database.
+Open [the console](http://127.0.0.1:18080/) and select **Run demo**. Compose applies
+the database migrations before starting the app. The first build downloads the
+base images and dependencies. Only Docker is needed for this path.
 
-This configuration binds to loopback. Each guided incident issues a tenant-scoped
-bearer credential that expires after one hour. The browser keeps it in memory,
-so refreshing the page starts a new session. See [the threat model](docs/THREAT_MODEL.md)
-for the public-hosting gates.
+1. Compare the **₦25,000** internal transfer with the **₦24,750** provider statement.
+2. Select **Review adjustment**, then **Post adjustment**. Proof records the **₦250**
+   provider fee in a new balanced journal.
+3. Select **Close settlement batch** once the finding is resolved.
+4. Open **Ledger explorer** for both journals and **Event trail** for the duplicate
+   request, out-of-order callback, statement hash, and operator audit trail.
 
-## Run from source
+The browser holds a one-hour demo credential in memory. Reload the page and
+start a new scenario to get a fresh session. Run `docker compose stop` to stop
+the stack and keep the local database.
 
-The source workflow defaults to development mode, which enables fixture and
-integration endpoints. Use it on localhost with fictional data.
+| Local endpoint | Use |
+| --- | --- |
+| [Console](http://127.0.0.1:18080/) | Guided reconciliation and ledger views |
+| [Swagger UI](http://127.0.0.1:18080/docs) | Explore the API contract |
+| [Readiness](http://127.0.0.1:18080/ready) | Check database connectivity |
+| [Grafana](http://127.0.0.1:13001/d/proof-operations) | Request latency, queue health, and open findings with the `observe` profile |
 
-```powershell
-docker compose up -d database
+## How it works
+
+```mermaid
+flowchart LR
+    Browser["React console"] --> API["FastAPI"]
+    Provider["Simulated provider"] -->|"Signed callback / statement"| API
+    API -->|"Payment, journal, idempotency and outbox"| PG[("PostgreSQL")]
+    API -->|"Reconciliation, adjustment and audit"| PG
+    PG --> Worker["Outbox and hold-expiry worker"]
+    Worker -->|"Stable event ID"| Receiver["Optional HTTP receiver"]
+```
+
+- **Ledger.** PostgreSQL enforces balanced, immutable posted journals. Balances
+  are derived from integer minor-unit entries. Adjustments and refunds create new journals.
+- **Payments.** A payment can move through authorization, submission, and capture.
+  Expiring holds and ordered account locks protect available funds. Idempotency keys
+  bind to request content and preserve the original command outcome on retry.
+- **Reconciliation.** Proof compares the imported statement with internal capture
+  records, stores the original evidence, and requires findings to be resolved before
+  closing a batch. Signed callbacks are evidence with their own replay protection.
+- **Recovery.** Financial changes and outbox records commit together. HTTP delivery
+  is at least once. A receiver deduplicates by event ID if the worker crashes after
+  delivery but before recording success.
+- **Access.** Sandbox sessions are short-lived and isolated per scenario. Operations
+  mode uses named, revocable API credentials for integrators, operators, auditors,
+  and providers.
+
+## Develop and verify
+
+Run these commands from the project root. The development database is published
+on port 55432. The source API listens on port 8000.
+
+```bash
+docker compose up -d --wait database
 uv sync --frozen
 uv run alembic upgrade head
+uv run pytest -o addopts="" -q
+uv run python scripts/export_openapi.py --check
+npm --prefix dashboard ci
+npm --prefix dashboard run build
 uv run proof-api
 ```
 
-Open `http://127.0.0.1:8000/docs`.
+The source workflow uses Python 3.12+ and Node.js 24. PostgreSQL tests create
+and remove their own schema, so use a test or local database role with schema
+creation privileges. `uv run pytest` runs the fast API suite alone.
 
-Build the desktop-first operations console with:
+To verify the running Docker demo over HTTP:
 
-```powershell
-cd dashboard
-npm ci
-npm run build
-cd ..
-uv run proof-api
+```bash
+uv run python scripts/smoke_demo.py
 ```
 
-Then open `http://127.0.0.1:8000/` and run the guided fictional incident.
+The check creates one fictional scenario and verifies duplicate evidence, a single
+adjustment across retries, both journal totals, the final balance, and batch closure.
 
-## Verify
+For operational checks:
 
-```powershell
-uv run pytest
-uv run pytest -m integration
-uv run python scripts/export_openapi.py
+```bash
+docker compose --profile observe up -d
+docker compose --profile worker up -d
 ```
 
-The PostgreSQL suite creates and migrates an isolated schema and removes it after
-the tests. The configured database role needs permission to create a schema.
+The worker expires holds and drains the outbox. Without an HTTP receiver configured,
+it uses the local demonstration sink. Retention uses a separate opt-in profile and
+should be enabled only on a dedicated demo database.
 
-For portfolio review, start with the [engineering case study](docs/CASE_STUDY.md).
-The [decision log](docs/DECISIONS.md), [runbook](docs/RUNBOOK.md), and
-[benchmark notes](docs/benchmarks/README.md) cover the tradeoffs and operating limits.
+## Engineering evidence
 
-## Implemented
+- [Case study](docs/CASE_STUDY.md) · The incident, design tradeoffs, and test evidence.
+- [Architecture](docs/ARCHITECTURE.md) and [decision records](docs/DECISIONS.md) · Boundaries, transactions, and recovery.
+- [OpenAPI contract](docs/openapi.json) · Endpoints, request bodies, and response schemas.
+- [Threat model](docs/THREAT_MODEL.md) and [runbook](docs/RUNBOOK.md) · Access, evidence, and failure handling.
+- [Benchmark notes](docs/benchmarks/README.md) · A local synthetic contention run and its limits.
+- [Deployment guide](docs/DEPLOYMENT.md) and [roadmap](docs/ROADMAP.md) · Configuration and remaining hosted checks.
 
-- Health and dependency readiness endpoints with request correlation.
-- Tenant-scoped accounts with fixed currencies and integer minor-unit balances.
-- Atomic double-entry journal posting with deterministic entry ordering.
-- Immutable posted journals and entries enforced by PostgreSQL triggers.
-- Database checks for non-zero entries, unique positions, tenant consistency, and balanced posting.
-- Reversals that create new linked journal transactions instead of rewriting history.
-- API tests for valid posting, tenant isolation, invalid currency combinations, and unbalanced journals.
-- Idempotent transfers with canonical request hashing and conflict detection.
-- Source-account locking and available-funds enforcement under concurrent PostgreSQL transactions.
-- Transactional outbox events committed atomically with transfer and ledger effects.
-- Timestamped HMAC provider webhooks with payload-bound replay protection.
-- Append-only provider evidence classified as matched, conflicting, unmatched, or out of order.
-- Recoverable outbox dispatch with exponential backoff, injected failures, and dead letters.
-- A causal transfer timeline joining business state, journal proof, outbox delivery, and provider evidence.
-- Content-addressed provider statement evidence with idempotent imports and reruns.
-- Explainable reconciliation findings for missing, duplicated, mismatched, and unexpected records.
-- Audited operator resolution that posts new balanced adjustments rather than rewriting history.
-- Deferred payments with expiring holds, capture fees, cancellation and partial refunds.
-- Settlement batch closure, named scoped API credentials, HTTP outbox delivery and operator requeue.
-- Prometheus metrics, a Grafana dashboard, optional OpenTelemetry traces and sandbox retention.
+## Release scope
 
-See [deployment and operations](docs/DEPLOYMENT.md) for hosted Compose, API key provisioning,
-retention, and monitoring. The guided console also supports closing the settlement batch.
+The guided sandbox and local monitoring stack are runnable today. The repository
+includes hosted Docker configuration. A public deployment, a live external
+receiver, and a hosted trace collector still need environment-specific verification.
 
-The product contract and roadmap live in `memory.md` and `docs/`.
+[MIT license](LICENSE)

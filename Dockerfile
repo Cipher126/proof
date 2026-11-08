@@ -13,7 +13,8 @@ WORKDIR /app
 RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
-RUN uv sync --frozen --no-dev --no-editable
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable --link-mode copy
 COPY --from=dashboard-build /ui/dist ./dashboard/dist
 COPY alembic.ini ./
 COPY migrations ./migrations

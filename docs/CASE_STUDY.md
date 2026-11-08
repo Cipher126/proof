@@ -19,6 +19,7 @@ Proof is a fictional payment ledger and reconciliation platform built to make th
 5. A content-addressed statement produces one explainable NGN 250 amount mismatch.
 6. An operator posts a controlled balanced adjustment.
 7. Proof retains the original records, links the new adjustment, and appends an audit event.
+8. The operator closes the batch after every finding is resolved.
 
 The operations console runs this story against the real backend; it is not a static mockup.
 
