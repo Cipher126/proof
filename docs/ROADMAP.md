@@ -47,11 +47,11 @@ Work in order. Do not expand later milestones while an earlier milestone lacks i
 - Money-flow view, ledger explorer, causal timeline, settlement view, discrepancy queue, and scenario controls.
 - Recruiter-oriented guided walkthrough with explicit fictional-data labeling.
 
-**Exit evidence:** the TypeScript console builds successfully and browser QA at 1440×1000 verified the real one-click incident, evidence views, causal timeline, and controlled resolution without terminal access.
+**Exit evidence:** the case queue, ledger explorer, and event trail support the end-to-end sandbox workflow. Desktop and narrow viewport checks verified the review, adjustment, and audit trail.
 
 ## Milestone 6 — Production evidence and portfolio packaging 🚧
 
 - Threat model, runbooks, telemetry dashboards, load and fault reports, architecture diagrams, public case study, and hosted demo.
 - Honest limitations and architectural tradeoffs.
 
-**Evidence:** the local container serves the dashboard after migration. The sandbox issues expiring, tenant-scoped credentials and attributes resolution audits to the authenticated credential. Public hosting still requires rate limits and demo-data retention.
+**Evidence:** the local container serves the dashboard after migration. Scenario creation is atomic and subject to database-wide admission limits. The sandbox issues expiring, tenant-scoped credentials and uses server-derived adjustments. Public hosting still requires per-client limits and managed demo-data retention.

@@ -62,6 +62,7 @@ def reconcile_statement(
 @router.post(
     "/tenants/{tenant_id}/reconciliation/findings/{finding_id}/resolve",
     response_model=FindingRead,
+    dependencies=[Depends(require_development)],
 )
 def resolve_finding(
     tenant_id: uuid.UUID,

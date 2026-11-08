@@ -50,4 +50,5 @@ Proof is a fictional payment-operations platform. It does not process real funds
 - PostgreSQL is not publicly reachable and uses a least-privilege application role.
 - Secrets are injected at runtime and never committed.
 - The demo tenant contains only fictional data.
-- The packaged sandbox disables generic tenant creation and other developer mutation routes. Anonymous guided scenario creation still needs an abuse budget and retention policy before public deployment.
+- The packaged sandbox disables generic tenant creation, arbitrary journal writes, and arbitrary adjustments. Its guided adjustment derives the amount and accounts from the stored scenario.
+- PostgreSQL limits anonymous creation to one concurrent setup, 60 scenarios per hour, and 2,000 retained scenarios per dedicated demo database. Public operation still needs per-client fairness and a retention plan.

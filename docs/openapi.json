@@ -1105,6 +1105,81 @@
         }
       }
     },
+    "/v1/tenants/{tenant_id}/demo/findings/{finding_id}/adjust": {
+      "post": {
+        "tags": [
+          "guided demo"
+        ],
+        "summary": "Adjust Demo Finding",
+        "operationId": "adjust_demo_finding_v1_tenants__tenant_id__demo_findings__finding_id__adjust_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -1278,6 +1353,14 @@
           "provider_event": {
             "$ref": "#/components/schemas/ProviderEventRead"
           },
+          "transfer_replayed": {
+            "type": "boolean",
+            "title": "Transfer Replayed"
+          },
+          "provider_duplicate": {
+            "type": "boolean",
+            "title": "Provider Duplicate"
+          },
           "statement": {
             "$ref": "#/components/schemas/StatementImportRead"
           },
@@ -1301,6 +1384,8 @@
           "accounts",
           "transfer",
           "provider_event",
+          "transfer_replayed",
+          "provider_duplicate",
           "statement",
           "reconciliation_run_id",
           "findings"

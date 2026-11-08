@@ -5,12 +5,14 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from proof import identity
+from proof import demo, identity
 from proof.db import get_session
 from proof.main import app
+from proof.ledger.models import Tenant
 from proof.operations.models import AuditEvent
 
 
@@ -22,6 +24,8 @@ def test_canonical_demo_runs_end_to_end(client: TestClient) -> None:
     assert scenario["transfer"]["amount_minor"] == 2_500_000
     assert scenario["provider_event"]["amount_minor"] == 2_475_000
     assert scenario["provider_event"]["classification"] == "conflict"
+    assert scenario["transfer_replayed"] is True
+    assert scenario["provider_duplicate"] is True
     assert len(scenario["findings"]) == 1
     assert scenario["findings"][0]["kind"] == "amount_mismatch"
 
@@ -64,12 +68,21 @@ def test_sandbox_credential_is_tenant_bound_and_supplies_audit_actor(client, mon
     ).status_code == 404
 
     finding = scenario["findings"][0]
-    response = client.post(
+    assert client.post(
         f"{base}/reconciliation/findings/{finding['id']}/resolve",
-        headers={**auth, "X-Operator-ID": "spoofed-operator"},
+        headers=auth,
         json={"resolution": "acknowledged", "reason": "Reviewed the fictional discrepancy"},
+    ).status_code == 404
+    adjust = f"{base}/demo/findings/{finding['id']}/adjust"
+    response = client.post(
+        adjust,
+        headers={**auth, "X-Operator-ID": "spoofed-operator"},
     )
     assert response.status_code == 200, response.text
+    assert response.json()["adjustment_journal_id"]
+    assert client.post(adjust, headers=auth).json() == response.json()
+    balance = client.get(f"{base}/accounts/{scenario['accounts']['customer']}/balance", headers=auth)
+    assert balance.json()["balance_minor"] == 2_475_000
 
     test_session = contextmanager(app.dependency_overrides[get_session])
     with test_session() as session:
@@ -83,3 +96,25 @@ def test_sandbox_credential_is_tenant_bound_and_supplies_audit_actor(client, mon
         session.commit()
 
     assert client.get(timeline, headers=auth).status_code == 401
+
+
+def test_failed_setup_rolls_back_and_admission_stops_at_capacity(client, monkeypatch):
+    def fail_provider(*args, **kwargs):
+        raise RuntimeError("injected provider failure")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(demo.provider_service, "build_demo_event", fail_provider)
+        with pytest.raises(RuntimeError, match="injected provider failure"):
+            client.post("/v1/demo/scenarios/canonical")
+
+    test_session = contextmanager(app.dependency_overrides[get_session])
+    with test_session() as session:
+        assert session.scalar(select(func.count()).select_from(Tenant)) == 0
+
+    monkeypatch.setattr(demo, "MAX_SCENARIOS_PER_HOUR", 1)
+    assert client.post("/v1/demo/scenarios/canonical").status_code == 200
+    blocked = client.post("/v1/demo/scenarios/canonical")
+    assert blocked.status_code == 429
+    assert blocked.json()["error"]["code"] == "demo_hourly_limit"
+    with test_session() as session:
+        assert session.scalar(select(func.count()).select_from(Tenant)) == 1

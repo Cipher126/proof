@@ -66,6 +66,14 @@ Record consequential and difficult-to-reverse choices here before implementation
 - **Evidence:** Reject missing, invalid, expired and cross-tenant credentials. Resolve the incident with a valid credential and verify that spoofed operator headers do not affect audit attribution.
 - **Revisit when:** Real users need long-lived identities, separately delegated roles, or account recovery.
 
+## ADR-008: Bound anonymous scenario creation in the demo database
+
+- **Status:** Accepted
+- **Context:** The guided demo creates durable fictional records without requiring a user account.
+- **Decision:** Create each scenario in a single database transaction. A PostgreSQL advisory transaction lock serializes the admission check, which caps starts per hour and across the lifetime of the demo database.
+- **Consequences:** Failed runs leave no partial scenario. A saturated sandbox returns a retryable response or requires rotation to a fresh dedicated demo database. The cap applies across API workers. Posted records remain append-only.
+- **Revisit when:** Public hosting needs per-visitor fairness, automatic retention, or more capacity.
+
 ## ADR template
 
 ### ADR-NNN: Decision title

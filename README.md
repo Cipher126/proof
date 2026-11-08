@@ -14,8 +14,11 @@ With Docker Desktop running, open PowerShell in the project folder and run:
 docker compose up --build -d
 ```
 
-Open [Proof](http://127.0.0.1:18080/) and click **Run guided incident**. Compare the
-₦25,000 transfer with the ₦24,750 provider statement, then post the ₦250 adjustment.
+Open [Proof](http://127.0.0.1:18080/) and click **Run demo**. Compare the
+₦25,000 transfer with the ₦24,750 provider statement, then choose
+**Review adjustment** and **Post adjustment**. Use **Ledger explorer** to
+compare the original and adjusting journals. **Event trail** shows the provider
+evidence, retry results, statement hash, and audit actor.
 The [API contract](http://127.0.0.1:18080/docs) is available in the same process.
 Compose applies migrations before starting the API. Run `docker compose stop` to
 stop the services and retain the demo database.

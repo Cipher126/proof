@@ -10,8 +10,10 @@ from sqlalchemy.exc import DBAPIError
 from concurrent.futures import ThreadPoolExecutor
 
 from sqlalchemy.orm import sessionmaker
+from fastapi import Response
 
 from proof.config import settings
+from proof.demo import DEMO_ADMISSION_LOCK, run_canonical_scenario
 from proof.ledger import service
 from proof.ledger.schemas import JournalCreate
 from proof.errors import ProofError
@@ -68,6 +70,17 @@ def _ledger_fixture():
         left = service.create_account(session, tenant.id, "Clearing", "NGN")
         right = service.create_account(session, tenant.id, "Merchant payable", "NGN")
         return tenant.id, left.id, right.id
+
+
+def test_demo_admission_lock_is_shared_across_postgres_connections() -> None:
+    with SessionLocal.begin() as owner:
+        owner.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": DEMO_ADMISSION_LOCK})
+        with SessionLocal() as contender, pytest.raises(ProofError) as error:
+            run_canonical_scenario(Response(), contender)
+        assert error.value.code == "demo_busy"
+    with SessionLocal() as contender:
+        scenario = run_canonical_scenario(Response(), contender)
+        assert scenario.transfer_replayed and scenario.provider_duplicate
 
 
 def test_database_rejects_unbalanced_posting() -> None:

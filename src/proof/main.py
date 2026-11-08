@@ -21,7 +21,7 @@ from proof.payments.api import router as payments_router
 from proof.providers.api import router as providers_router
 from proof.operations.api import router as operations_router
 from proof.reconciliation.api import router as reconciliation_router
-from proof.demo import router as demo_router
+from proof.demo import router as demo_router, tenant_router as demo_tenant_router
 
 logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("proof")
@@ -37,6 +37,7 @@ app.include_router(providers_router)
 app.include_router(operations_router)
 app.include_router(reconciliation_router)
 app.include_router(demo_router)
+app.include_router(demo_tenant_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],

@@ -229,6 +229,7 @@ def resolve_finding(
         select(ReconciliationFinding)
         .where(ReconciliationFinding.id == finding_id, ReconciliationFinding.tenant_id == tenant_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if finding is None:
         raise NotFoundError("reconciliation finding")

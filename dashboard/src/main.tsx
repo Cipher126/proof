@@ -1,228 +1,313 @@
-import React, { useMemo, useState } from "react";
+import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type Finding = {
   id: string;
-  kind: string;
-  status: string;
-  expected: Record<string, unknown> | null;
-  actual: Record<string, unknown> | null;
+  status: "open" | "resolved";
+  explanation: string;
+  expected: { amount_minor?: number } | null;
+  actual: { amount_minor?: number } | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
   adjustment_journal_id: string | null;
 };
 
 type Scenario = {
   tenant_id: string;
   access_token: string;
-  tenant_name: string;
-  fictional: boolean;
-  accounts: { system: string; merchant: string; customer: string; provider_fee: string };
-  transfer: {
-    id: string;
-    client_reference: string;
-    amount_minor: number;
-    currency: string;
-    status: string;
-    journal_id: string;
-  };
-  provider_event: {
-    id: string;
-    amount_minor: number;
-    classification: string;
-    provider_status: string;
-  };
-  statement: { id: string; content_hash: string; row_count: number };
-  reconciliation_run_id: string;
+  accounts: { merchant: string; customer: string; provider_fee: string };
+  transfer: { id: string; client_reference: string; amount_minor: number; journal_id: string };
+  provider_event: { amount_minor: number; classification: string };
+  transfer_replayed: boolean;
+  provider_duplicate: boolean;
+  statement: { content_hash: string; row_count: number };
   findings: Finding[];
 };
 
-type TimelineItem = {
-  occurred_at: string;
-  kind: string;
-  summary: string;
-  data: Record<string, unknown>;
-};
+type Entry = { account_id: string; amount_minor: number; position: number };
+type Journal = { id: string; entries: Entry[] };
+type Event = { occurred_at: string; kind: string; summary: string };
+type Workspace = { scenario: Scenario; original: Journal; events: Event[]; adjustment?: Journal };
+type View = "Cases" | "Ledger" | "Activity";
+type Filter = "All" | "Open" | "Resolved";
 
 const API = import.meta.env.VITE_API_URL ?? "";
+const formatMoney = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" });
+const money = (minor: number) => formatMoney.format(minor / 100);
+const brief = (value: string) => value.length > 22 ? value.slice(0, 8) + "…" + value.slice(-6) : value;
 
-function money(minor: number) {
-  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(minor / 100);
+const icons = {
+  logo: "M4 12l4-4 4 4 4-4 4 4-8 8-8-8Zm4-4 4-4 4 4",
+  cases: "M4 5h16v14H4z M4 10h16m-11 0v9",
+  ledger: "M5 4h14v16H5z m4 4h6m-6 4h6m-6 4h3",
+  activity: "M3 12h4l2-5 4 10 3-5h5",
+  code: "m8 7-5 5 5 5m8-10 5 5-5 5m-2-13-4 16",
+  arrow: "M4 12h15m-6-6 6 6-6 6",
+  plus: "M12 5v14M5 12h14",
+  check: "m5 12 4 4L19 6",
+  shield: "M12 3 5 6v5c0 4 3 8 7 10 4-2 7-6 7-10V6l-7-3Z m-3 9 2 2 4-4",
+  warning: "M12 8v5m0 3h.01 M12 3l9 16H3l9-16Z",
+  file: "M6 3h8l4 4v14H6z m8 0v5h4m-9 4h6m-6 4h6",
+  external: "M13 5h6v6m0-6-8 8m6 0v6H5V7h6",
+  close: "m6 6 12 12M18 6 6 18",
+};
+
+function Icon({ name, size = 18 }: { name: keyof typeof icons; size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={icons[name]} /></svg>;
 }
 
-function short(value?: string | null) {
-  return value ? `${value.slice(0, 8)}…${value.slice(-4)}` : "—";
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(API + path, init);
+  if (response.ok) return response.json();
+  if (response.status === 401) throw new Error("This session expired. Run a new scenario to continue.");
+  const failure = await response.json().catch(() => null);
+  throw new Error(failure?.error?.message ?? "Proof could not complete this request. Try again.");
 }
 
-function Icon({ name }: { name: "pulse" | "ledger" | "route" | "shield" }) {
-  const paths = {
-    pulse: <path d="M3 12h4l2-7 4 14 2-7h6" />,
-    ledger: <><path d="M5 3h14v18H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
-    route: <><circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h5a4 4 0 0 1 4 4v0a4 4 0 0 1-4 4H9a4 4 0 0 0-4 4v0"/></>,
-    shield: <><path d="M12 3 5 6v5c0 5 3 8 7 10 4-2 7-5 7-10V6z"/><path d="m9 12 2 2 4-4"/></>,
-  };
-  return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
+function tenantRequest<T>(scenario: Scenario, path: string, method = "GET"): Promise<T> {
+  return request<T>(`/v1/tenants/${scenario.tenant_id}${path}`, {
+    method, headers: { Authorization: `Bearer ${scenario.access_token}` },
+  });
+}
+
+function Tag({ children, tone = "neutral" }: { children: string; tone?: string }) {
+  return <span className={`tag ${tone}`}><i />{children}</span>;
+}
+
+function Orbit() {
+  return <svg className="orbit" viewBox="0 0 460 170" aria-hidden="true">
+    <defs>
+      <pattern id="dot-grid" width="14" height="14" patternUnits="userSpaceOnUse">
+        <circle cx="2" cy="2" r="0.9" fill="#e5dcff" opacity=".27" />
+      </pattern>
+      <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1">
+        <stop stopColor="#c9b9ff" /><stop offset="1" stopColor="#f1b9fd" />
+      </linearGradient>
+    </defs>
+    <path d="M60 0h400v170H60z" fill="url(#dot-grid)" />
+    <g transform="translate(290 86) rotate(-26)" fill="none">
+      {[0, 1, 2, 3, 4, 5, 6].map(n =>
+        <ellipse key={n} rx={112 + 12 * n} ry={19 + 7 * n} stroke="url(#ribbon)" opacity={.5 - n * .055} />)}
+      <circle cx="115" cy="-15" r="4.5" fill="#f1dcff" /><circle cx="-147" cy="7" r="3" fill="#e7caff" />
+    </g>
+    <g transform="translate(271 57)">
+      <rect width="60" height="60" rx="16" fill="#7658db" stroke="#bca8ff" />
+      <path d="m15 30 9-9 6 6 6-6 9 9-15 15-15-15Zm9-9 6-6 6 6" fill="none"
+        stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </g>
+  </svg>;
 }
 
 function App() {
-  const [scenario, setScenario] = useState<Scenario | null>(null);
-  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<View>("Cases");
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [filter, setFilter] = useState<Filter>("All");
+  const [busy, setBusy] = useState<"start" | "resolve" | null>(null);
   const [error, setError] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const [lastPosted, setLastPosted] = useState<number | null>(null);
 
-  const finding = scenario?.findings[0] ?? null;
+  const scenario = workspace?.scenario;
+  const finding = scenario?.findings[0];
   const resolved = finding?.status === "resolved";
-  const discrepancy = scenario
-    ? Number(finding?.expected?.amount_minor ?? scenario.transfer.amount_minor) -
-      Number(finding?.actual?.amount_minor ?? scenario.provider_event.amount_minor)
-    : 25_000;
+  const expected = finding?.expected?.amount_minor ?? 2_500_000;
+  const reported = finding?.actual?.amount_minor ?? 2_475_000;
+  const difference = expected - reported;
+  const selected = filter === "All" || (filter === "Resolved" ? resolved : !resolved);
+  const status = resolved ? "Resolved" : "Needs review";
+  const nav = { Cases: "cases", Ledger: "ledger", Activity: "activity" } as const;
 
-  async function refreshTimeline(next: Scenario) {
-    const response = await fetch(
-      `${API}/v1/tenants/${next.tenant_id}/operations/transfers/${next.transfer.id}/timeline`,
-      { headers: { Authorization: `Bearer ${next.access_token}` } },
-    );
-    if (response.ok) setTimeline((await response.json()).items);
+  function navigate(next: View) {
+    setView(next);
+    setConfirm(false);
   }
 
-  async function runIncident() {
-    setBusy(true); setError("");
+  async function start() {
+    setBusy("start");
+    setError("");
+    setConfirm(false);
     try {
-      const response = await fetch(`${API}/v1/demo/scenarios/canonical`, { method: "POST" });
-      if (!response.ok) throw new Error("Could not create the guided incident.");
-      const next: Scenario = await response.json();
-      setScenario(next);
-      setTimeline([]);
-      await refreshTimeline(next);
+      const next = await request<Scenario>("/v1/demo/scenarios/canonical", { method: "POST" });
+      const [original, trace] = await Promise.all([
+        tenantRequest<Journal>(next, `/journals/${next.transfer.journal_id}`),
+        tenantRequest<{ items: Event[] }>(next, `/operations/transfers/${next.transfer.id}/timeline`),
+      ]);
+      setWorkspace({ scenario: next, original, events: trace.items });
+      setLastPosted(null);
+      setFilter("All");
+      navigate("Cases");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unexpected failure");
-    } finally { setBusy(false); }
+      setError((cause as Error).message);
+    } finally {
+      setBusy(null);
+    }
   }
 
-  async function resolveFinding() {
-    if (!scenario || !finding) return;
-    setBusy(true); setError("");
+  async function resolve() {
+    if (!workspace || !scenario || !finding || resolved) return;
+    setBusy("resolve");
+    setError("");
     try {
-      const response = await fetch(
-        `${API}/v1/tenants/${scenario.tenant_id}/reconciliation/findings/${finding.id}/resolve`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${scenario.access_token}`,
-          },
-          body: JSON.stringify({
-            resolution: "adjusted",
-            reason: "Recognize the fictional provider settlement fee.",
-            adjustment_description: "Provider fee reconciliation adjustment",
-            adjustment_entries: [
-              { account_id: scenario.accounts.customer, amount_minor: -discrepancy },
-              { account_id: scenario.accounts.provider_fee, amount_minor: discrepancy },
-            ],
-          }),
-        },
-      );
-      if (response.status === 401) throw new Error("This incident expired. Run a fresh incident.");
-      if (!response.ok) throw new Error("The controlled adjustment could not be posted.");
-      const updated: Finding = await response.json();
-      const next = { ...scenario, findings: [updated, ...scenario.findings.slice(1)] };
-      setScenario(next);
+      const result = await tenantRequest<Finding>(scenario, `/demo/findings/${finding.id}/adjust`, "POST");
+      const next = { ...workspace, scenario: { ...scenario, findings: [result, ...scenario.findings.slice(1)] } };
+      setWorkspace(next);
+      setConfirm(false);
+      if (result.adjustment_journal_id) {
+        const [adjustment, balance] = await Promise.all([
+          tenantRequest<Journal>(scenario, `/journals/${result.adjustment_journal_id}`),
+          tenantRequest<{ balance_minor: number }>(scenario, `/accounts/${scenario.accounts.customer}/balance`),
+        ]);
+        setWorkspace({ ...next, adjustment });
+        setLastPosted(balance.balance_minor);
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unexpected failure");
-    } finally { setBusy(false); }
+      setError((cause as Error).message);
+    } finally {
+      setBusy(null);
+    }
   }
 
-  const steps = useMemo(() => timeline.length ? timeline : [
-    { occurred_at: "", kind: "transfer", summary: "Transfer command accepted", data: {} },
-    { occurred_at: "", kind: "journal", summary: "Balanced journal posted", data: {} },
-    { occurred_at: "", kind: "provider_evidence", summary: "Provider mismatch detected", data: {} },
-  ], [timeline]);
+  const displayId = finding ? `REC-${finding.id.slice(0, 6).toUpperCase()}` : "REC-DEMO";
+  const names = scenario ? {
+    [scenario.accounts.merchant]: "Merchant available",
+    [scenario.accounts.customer]: "Customer payable",
+    [scenario.accounts.provider_fee]: "Provider fee expense",
+  } : {};
+  const resolutionEvent: Event[] = finding?.resolved_at ? [{
+    occurred_at: finding.resolved_at, kind: "resolution", summary: "Fee adjustment posted and finding resolved",
+  }] : [];
 
   return (
-    <div className="shell">
-      <aside className="rail">
-        <div className="brand-mark">P<span>.</span></div>
-        <nav aria-label="Primary">
-          <button className="nav-active" aria-label="Operations"><Icon name="pulse" /></button>
-          <button aria-label="Ledger"><Icon name="ledger" /></button>
-          <button aria-label="Flows"><Icon name="route" /></button>
-          <button aria-label="Controls"><Icon name="shield" /></button>
+    <div className="app">
+      <aside className="sidebar">
+        <a className="brand" href="/" aria-label="Proof home"><span className="brand-icon"><Icon name="logo" size={23} /></span>proof<span className="brand-dot">.</span></a>
+        <div className="side-label">WORKSPACE</div>
+        <nav aria-label="Workspace">
+          {(Object.keys(nav) as View[]).map(item => (
+            <button key={item} className={view === item ? "current" : ""} aria-current={view === item ? "page" : undefined}
+              onClick={() => navigate(item)}><Icon name={nav[item]} />{item === "Cases" ? "Reconciliation" : item === "Ledger" ? "Ledger explorer" : "Event trail"}</button>
+          ))}
         </nav>
-        <div className="rail-status"><i />API</div>
+        <div className="side-label secondary">RESOURCES</div>
+        <nav aria-label="Resources">
+          <a href={API + "/docs"} target="_blank" rel="noreferrer"><Icon name="code" />API reference<Icon name="external" size={13} /></a>
+        </nav>
+        <div className="side-footer"><span className="side-avatar"><Icon name="shield" size={19} /></span><div><strong>Proof Sandbox</strong><small>Fictional funds only</small></div></div>
       </aside>
 
-      <main>
+      <div className="surface">
         <header className="topbar">
-          <div>
-            <div className="eyebrow">PAYMENT OPERATIONS / <b>FICTIONAL SANDBOX</b></div>
-            <h1>Proof<span>.</span></h1>
-          </div>
-          <div className="top-actions">
-            <div className="environment"><i /> SYSTEM HEALTHY</div>
-            <button className="run-button" onClick={runIncident} disabled={busy}>
-              {busy ? "Running proof…" : scenario ? "Run fresh incident" : "Run guided incident"}
-            </button>
-          </div>
+          <div className="crumb"><span>Workspace</span><span aria-hidden="true">/</span><strong>{view === "Cases" ? "Reconciliation" : view}</strong></div>
+          <Tag tone="violet">Sandbox</Tag>
         </header>
 
-        {error && <div className="error-banner">{error}</div>}
-
-        <section className="intro">
-          <div>
-            <p className="section-kicker">LIVE CONTROL SURFACE</p>
-            <h2>Every cent has<br />a reason.</h2>
+        <main className="main">
+          <div className="page-title">
+            <div><p className="eyebrow">PAYMENT OPERATIONS</p><h1>{view === "Cases" ? "Reconciliation" : view === "Ledger" ? "Ledger explorer" : "Event trail"}</h1>
+            <p>{view === "Cases" ? "Investigate settlement differences and close them with an audit trail." : view === "Ledger" ? "Inspect the original posting and its linked adjustment." : "Follow the transfer, provider evidence and resolution in order."}</p></div>
+            <button className="button primary" onClick={start} disabled={!!busy}><Icon name="plus" size={17} />{busy === "start" ? "Starting…" : workspace ? "New scenario" : "Run demo"}</button>
           </div>
-          <p className="intro-copy">Trace a transfer from command to journal, compare it with provider evidence, and resolve the mismatch without rewriting history.</p>
-        </section>
 
-        <section className="metrics">
-          <article><span>LEDGER INTEGRITY</span><strong className="good">BALANCED</strong><small>Σ entries = 0</small></article>
-          <article><span>TRANSFER</span><strong>{scenario ? money(scenario.transfer.amount_minor) : "₦25,000.00"}</strong><small>{scenario ? short(scenario.transfer.id) : "awaiting incident"}</small></article>
-          <article><span>RECONCILIATION</span><strong className={resolved ? "good" : "alert"}>{resolved ? "RESOLVED" : "1 OPEN"}</strong><small>{money(discrepancy)} difference</small></article>
-          <article><span>EVIDENCE</span><strong>{scenario ? "3 SOURCES" : "READY"}</strong><small>ledger · provider · statement</small></article>
-        </section>
+          {error && <div className="error" role="alert"><Icon name="warning" />{error}<button onClick={() => setError("")} aria-label="Dismiss error"><Icon name="close" /></button></div>}
 
-        <section className="workspace">
-          <article className="panel flow-panel">
-            <div className="panel-head"><span>01 / MONEY FLOW</span><em>IMMUTABLE</em></div>
-            <div className="flow-stage">
-              <div className="node source"><small>SOURCE</small><b>Merchant</b><span>{scenario ? money(scenario.transfer.amount_minor) : "₦25,000"}</span></div>
-              <div className="flow-line"><span>−</span><i /><b>{scenario ? short(scenario.transfer.journal_id) : "journal proof"}</b><i /><span>+</span></div>
-              <div className="node destination"><small>DESTINATION</small><b>Customer payable</b><span>{scenario ? money(scenario.transfer.amount_minor) : "₦25,000"}</span></div>
+          {view === "Cases" && <>
+            <section className="banner" aria-label="Guided scenario">
+              <div className="banner-content">
+                <p className="banner-label"><Icon name="logo" size={15} /> GUIDED SCENARIO · 01</p>
+                <h2>The ₦250 settlement gap</h2>
+                <p>Trace a fictional payment from ledger to provider, then post the fee that closes the difference.</p>
+              </div>
+              <Orbit />
+            </section>
+
+            <section className="summary" aria-label={scenario ? "Scenario totals" : "Example totals"}>
+              {[
+                { name: "Ledger amount", value: expected, icon: "ledger", tone: "lavender" },
+                { name: "Provider reported", value: reported, icon: "file", tone: "blue" },
+                { name: resolved ? "Adjusted difference" : "Unreconciled difference", value: difference, icon: resolved ? "check" : "warning", tone: resolved ? "mint" : "amber" },
+              ].map(metric => <article className="metric" key={metric.name}>
+                <div className={`tile-icon ${metric.tone}`}><Icon name={metric.icon as keyof typeof icons} /></div>
+                <div><span>{metric.name}</span><strong>{money(metric.value)}</strong></div>
+              </article>)}
+            </section>
+
+            <div className="case-layout">
+              <section className="panel queue" aria-labelledby="queue-title">
+                <div className="panel-heading"><div><h2 id="queue-title">Case queue</h2><p>{scenario ? "Findings from the active scenario" : "Example data · run the demo to create a case"}</p></div><span className="count">1</span></div>
+                <div className="filters" aria-label="Filter cases">
+                  {(["All", "Open", "Resolved"] as Filter[]).map(item => <button key={item}
+                    className={filter === item ? "selected" : ""} aria-pressed={filter === item}
+                    onClick={() => setFilter(item)}>{item}</button>)}
+                </div>
+                <div className="table-scroll">
+                  <table className="case-table"><thead><tr><th>Case</th><th>Difference</th><th>Status</th></tr></thead>
+                    <tbody>{selected ? <tr className="active-row"><td><strong>Amount mismatch</strong><small>{displayId}</small></td><td className="numeric">{money(difference)}</td><td><Tag tone={resolved ? "green" : "gold"}>{scenario ? status : "Example"}</Tag></td></tr>
+                      : <tr><td colSpan={3} className="empty-row">No {filter.toLowerCase()} cases.</td></tr>}</tbody>
+                  </table>
+                </div>
+                <div className="queue-foot"><Icon name="shield" size={16} /> The original journal remains intact after an adjustment.</div>
+              </section>
+
+              <section className="panel detail" aria-labelledby="detail-title">
+                <div className="panel-heading"><div><p className="eyebrow">{displayId}</p><h2 id="detail-title">Settlement difference</h2></div><Tag tone={resolved ? "green" : "gold"}>{scenario ? status : "Preview"}</Tag></div>
+                <p className="detail-copy">{resolved ? "The fee is recorded in a separate, balanced journal." : "The provider statement reflects a fictional fee withheld from the original transfer."}</p>
+                <dl className="compare"><div><dt>Ledger posted</dt><dd>{money(expected)}</dd></div><div><dt>Statement reported</dt><dd>{money(reported)}</dd></div>
+                  <div className="variance"><dt>{resolved ? "Fee recorded" : "Difference"}</dt><dd>{money(difference)}</dd></div></dl>
+                {!scenario && <button className="button secondary-button" disabled={!!busy} onClick={start}>Run this scenario<Icon name="arrow" size={16} /></button>}
+                {scenario && !resolved && !confirm && <button className="button primary wide" disabled={!!busy} onClick={() => setConfirm(true)}>Review adjustment<Icon name="arrow" size={16} /></button>}
+                {confirm && !resolved && <div className="review">
+                  <h3>Proposed journal</h3><dl><div><dt>Customer payable</dt><dd>−{money(difference)}</dd></div><div><dt>Provider fee expense</dt><dd>+{money(difference)}</dd></div></dl>
+                  <div className="review-actions"><button className="button secondary-button" disabled={!!busy} onClick={() => setConfirm(false)}>Cancel</button>
+                    <button className="button primary" disabled={!!busy} onClick={resolve}>{busy === "resolve" ? "Posting…" : "Post adjustment"}</button></div>
+                </div>}
+                {resolved && <div className="success" role="status"><Icon name="check" /><div><strong>Adjustment posted</strong>{lastPosted !== null && <span>Customer payable now {money(lastPosted)}</span>}</div>
+                  <button onClick={() => navigate("Ledger")}>View journal <Icon name="arrow" size={14} /></button></div>}
+              </section>
             </div>
-            <div className="equation"><b>DEBITS</b><span>{money(scenario?.transfer.amount_minor ?? 2_500_000)}</span><i>=</i><b>CREDITS</b><span>{money(scenario?.transfer.amount_minor ?? 2_500_000)}</span></div>
-          </article>
+          </>}
 
-          <article className="panel incident-panel">
-            <div className="panel-head"><span>02 / RECONCILIATION</span><em className={resolved ? "success-pill" : "danger-pill"}>{resolved ? "CLOSED" : "ACTION REQUIRED"}</em></div>
-            <div className="incident-title"><div className="warning">!</div><div><small>AMOUNT MISMATCH</small><h3>{money(discrepancy)}</h3></div></div>
-            <div className="compare"><div><span>INTERNAL LEDGER</span><b>{scenario ? money(scenario.transfer.amount_minor) : "₦25,000.00"}</b></div><div><span>PROVIDER STATEMENT</span><b>{scenario ? money(scenario.provider_event.amount_minor) : "₦24,750.00"}</b></div></div>
-            <p>The provider retained a fictional settlement fee. Proof preserves both records and requires an explicit adjustment.</p>
-            <button className="resolve-button" disabled={!scenario || resolved || busy} onClick={resolveFinding}>{resolved ? "Adjustment posted ✓" : "Post controlled adjustment"}</button>
-          </article>
+          {view !== "Cases" && !workspace && <section className="panel empty"><Icon name={nav[view]} size={28} /><h2>No active scenario</h2><p>Run the guided demo to create records for this workspace.</p><button className="button primary" onClick={start} disabled={!!busy}>Run demo</button></section>}
+          {view === "Ledger" && workspace && <div className="stack">
+            {[workspace.original, workspace.adjustment].flatMap((journal, index) => journal ? [
+              <section className="panel journal" key={journal.id}>
+                <div className="panel-heading"><div><p className="eyebrow">{index === 0 ? "ORIGINAL POSTING" : "LINKED ADJUSTMENT"}</p>
+                  <h2>{index === 0 ? "Merchant settlement" : "Provider settlement fee"}</h2><p className="identifier">{journal.id}</p></div><Tag tone="green">Posted</Tag></div>
+                <div className="table-scroll"><table><thead><tr><th>Line</th><th>Account</th><th className="numeric">Signed amount</th></tr></thead>
+                  <tbody>{journal.entries.map(entry => <tr key={entry.position}><td>{entry.position + 1}</td><td>{names[entry.account_id] ?? brief(entry.account_id)}</td>
+                    <td className="numeric">{money(entry.amount_minor)}</td></tr>)}</tbody>
+                  <tfoot><tr><th colSpan={2}>Net movement</th><td className="numeric">{money(journal.entries.reduce((total, entry) => total + entry.amount_minor, 0))}</td></tr></tfoot>
+                </table></div>
+              </section>,
+            ] : [])}
+          </div>}
 
-          <article className="panel evidence-panel">
-            <div className="panel-head"><span>03 / PROOF</span><em>APPEND-ONLY</em></div>
-            <div className="stamp"><div>VERIFIED</div><span>DOUBLE ENTRY</span></div>
-            <dl>
-              <div><dt>Transaction</dt><dd>{short(scenario?.transfer.id)}</dd></div>
-              <div><dt>Journal</dt><dd>{short(scenario?.transfer.journal_id)}</dd></div>
-              <div><dt>Statement hash</dt><dd>{short(scenario?.statement.content_hash)}</dd></div>
-              <div><dt>Provider class</dt><dd>{scenario?.provider_event.classification ?? "conflict"}</dd></div>
-            </dl>
-          </article>
-        </section>
-
-        <section className="timeline-section">
-          <div className="timeline-heading"><div><p className="section-kicker">CAUSAL TRACE</p><h3>What happened, in order.</h3></div><span>{scenario?.tenant_name ?? "No scenario loaded"}</span></div>
-          <div className="timeline">
-            {steps.map((item, index) => <div className="timeline-item" key={`${item.kind}-${index}`}><span className="step">{String(index + 1).padStart(2, "0")}</span><i /><div><small>{item.kind.replaceAll("_", " ")}</small><b>{item.summary}</b><em>{item.occurred_at ? new Date(item.occurred_at).toLocaleTimeString() : "deterministic demo"}</em></div></div>)}
-          </div>
-        </section>
-
-        <footer><span>PROOF / EVERY CENT ACCOUNTED FOR</span><span>SIMULATED FUNDS · NO REAL MONEY</span></footer>
-      </main>
+          {view === "Activity" && workspace && scenario && <div className="activity-layout">
+            <section className="panel">
+              <div className="panel-heading"><div><h2>Transfer activity</h2><p>{scenario.transfer.client_reference}</p></div><Tag tone="violet">Fictional</Tag></div>
+              <ol className="event-list">{[...workspace.events, ...resolutionEvent].map((item, index) =>
+                <li key={index}><span className="event-icon"><Icon name={item.kind === "resolution" ? "check" : "activity"} size={16} /></span>
+                  <div><small>{item.kind.replaceAll("_", " ")}</small><strong>{item.summary}</strong></div>
+                  <time dateTime={item.occurred_at}>{new Date(item.occurred_at).toLocaleTimeString([], { timeStyle: "medium" })}</time></li>)}</ol>
+            </section>
+            <section className="panel trace">
+              <div className="panel-heading"><div><h2>Evidence references</h2><p>From the active scenario</p></div></div>
+              <dl className="refs">
+                <div><dt>Transfer</dt><dd>{scenario.transfer.id}</dd></div>
+                <div><dt>Statement SHA-256</dt><dd>{scenario.statement.content_hash}</dd></div>
+                <div><dt>Provider classification</dt><dd>{scenario.provider_event.classification}</dd></div>
+                <div><dt>Transfer retry</dt><dd>{scenario.transfer_replayed ? "Original transfer returned" : "No replay recorded"}</dd></div>
+                <div><dt>Duplicate callback</dt><dd>{scenario.provider_duplicate ? "Original evidence returned" : "No duplicate recorded"}</dd></div>
+                {finding?.resolved_by && <div><dt>Audited actor</dt><dd>{finding.resolved_by}</dd></div>}
+              </dl>
+            </section>
+          </div>}
+          <footer>Proof <span>·</span> Every cent accounted for <span>·</span> Simulated funds</footer>
+        </main>
+      </div>
     </div>
   );
 }
 
-createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById("root")!).render(<App />);
