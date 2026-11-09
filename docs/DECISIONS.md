@@ -114,6 +114,13 @@ Record consequential and difficult-to-reverse choices here before implementation
 - **Decision:** Add a partial index on tenant and completion time for transfers with a journal. Preserve the existing candidate query and its inclusive boundaries. Measure the same query and confirm the candidate IDs before and after migration.
 - **Tradeoff:** Posting pays one extra index write. The transactional index build briefly blocks transfer writes, so schedule the migration for a quiet window on a populated database.
 
+## ADR-015: Check schema compatibility before reporting ready
+
+- **Status:** Accepted
+- **Decision:** Readiness queries the Alembic revision and probes readable tables using the API's runtime login. Liveness remains independent of PostgreSQL.
+- **Compatibility:** This API accepts revisions 0011 and 0012. Revision 0011 has the required application schema, and 0012 adds an index. Review the supported revisions alongside each new migration and its rollout plan.
+- **Failure behavior:** Return 503 for an unreachable database or for a missing, unsupported, or unreadable schema. The end-to-end smoke flow exercises write access separately.
+
 ## ADR template
 
 ### ADR-NNN: Decision title

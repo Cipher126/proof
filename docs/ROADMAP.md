@@ -18,7 +18,7 @@ Work in order. Do not expand later milestones while an earlier milestone lacks i
 - Reversals and traceable references.
 - Property and concurrency tests.
 
-**Exit evidence:** atomic posting, derived balances, PostgreSQL balance/immutability triggers, reversals, API tests, and direct PostgreSQL invariant tests are implemented and passing.
+**Exit evidence:** atomic posting, derived balances, PostgreSQL balance/immutability triggers, reversals, API tests, generated ledger and replay properties, and direct PostgreSQL invariant tests are implemented and passing.
 
 ## Milestone 2 — Idempotent payment commands
 
@@ -54,4 +54,4 @@ Work in order. Do not expand later milestones while an earlier milestone lacks i
 - Threat model, runbooks, telemetry dashboards, load and fault reports, architecture diagrams, public case study, and hosted demo.
 - Honest limitations and architectural tradeoffs.
 
-**Evidence:** The local image includes Prometheus metrics, a Grafana dashboard, optional OTLP tracing, named scoped credentials, sandbox admission caps, and opt-in retention. The hosted Compose profile, Render Free Blueprint, and deployment guide are included. The [recovery drill](RECOVERY.md) verifies the packaged image, a database outage, and an isolated restore. Public deployment and live verification with the chosen host, collector, and receiver remain pending.
+**Evidence:** The local image includes Prometheus metrics, a Grafana dashboard, optional OTLP tracing, named scoped credentials, sandbox admission caps, and opt-in retention. PostgreSQL tests verify schema readiness and the API-to-worker trace using loopback OTLP and webhook receivers. The hosted Compose profile, Render Free Blueprint, and deployment guide are included. The [recovery drill](RECOVERY.md) verifies the packaged image, a database outage, and an isolated restore. Public deployment and live verification with the chosen host, collector, and receiver remain pending.

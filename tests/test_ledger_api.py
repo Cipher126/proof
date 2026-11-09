@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from hypothesis import HealthCheck, given, settings, strategies as st
 
 
 def tenant(client: TestClient, name: str = "Northstar Demo") -> str:
@@ -107,3 +108,38 @@ def test_rejects_cross_currency_balancing(client: TestClient) -> None:
     )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "unbalanced_journal"
+
+
+# Each example creates its own tenant and uses no data from earlier examples.
+@settings(max_examples=30, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(
+    credits=st.lists(st.integers(min_value=1, max_value=10**9), min_size=1, max_size=8),
+    discrepancy=st.integers(min_value=1, max_value=10**6),
+)
+def test_journal_conserves_generated_amounts(client: TestClient, credits: list[int], discrepancy: int) -> None:
+    tenant_id = tenant(client)
+    source = account(client, tenant_id, "Clearing")
+    destination = account(client, tenant_id, "Payable")
+    headers = {"X-Tenant-ID": tenant_id}
+    base = f"/v1/tenants/{tenant_id}"
+    total = sum(credits)
+    payload = {
+        "reference": "property/funding",
+        "description": "Generated fictional journal",
+        "entries": [
+            {"account_id": source, "amount_minor": -total - discrepancy},
+            *({"account_id": destination, "amount_minor": credit} for credit in credits),
+        ],
+    }
+    rejected = client.post(f"{base}/journals", headers=headers, json=payload)
+    assert rejected.status_code == 400
+    assert rejected.json()["error"]["code"] == "unbalanced_journal"
+
+    payload["entries"][0]["amount_minor"] = -total
+    posted = client.post(f"{base}/journals", headers=headers, json=payload)
+    assert posted.status_code == 201, posted.text
+    assert sum(entry["amount_minor"] for entry in posted.json()["entries"]) == 0
+    for account_id, expected in ((source, -total), (destination, total)):
+        balance = client.get(f"{base}/accounts/{account_id}/balance", headers=headers)
+        assert balance.status_code == 200
+        assert balance.json()["balance_minor"] == expected

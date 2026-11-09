@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from opentelemetry import propagate, trace
 from prometheus_client import CONTENT_TYPE_LATEST
 
@@ -33,6 +33,7 @@ logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s 
 logger = logging.getLogger("proof")
 telemetry.configure_tracing("proof-api")
 tracer = trace.get_tracer(__name__)
+READY_SCHEMA_REVISIONS = frozenset({"0011", "0012"})
 
 app = FastAPI(
     title="Proof API",
@@ -111,13 +112,25 @@ def health() -> dict[str, str]:
     return {"status": "alive"}
 
 
-@app.get("/ready", tags=["operations"])
+@app.get("/ready", tags=["operations"], responses={503: {"description": "Database or schema unavailable"}})
 def ready() -> dict[str, str]:
+    credentials = "operator_credentials" if settings.environment == "operations" else "demo_credentials"
     try:
         with SessionLocal() as session:
-            session.execute(text("SELECT 1"))
+            revisions = session.execute(text(f"""
+                SELECT version_num,
+                       EXISTS (SELECT 1 FROM tenants),
+                       EXISTS (SELECT 1 FROM journal_transactions),
+                       EXISTS (SELECT 1 FROM transfers),
+                       EXISTS (SELECT 1 FROM {credentials})
+                FROM alembic_version
+            """)).scalars().all()
     except OperationalError:
         raise ProofError("database_unavailable", "database is unavailable", 503) from None
+    except ProgrammingError:
+        raise ProofError("database_schema_unavailable", "required database schema is unavailable", 503) from None
+    if len(revisions) != 1 or revisions[0] not in READY_SCHEMA_REVISIONS:
+        raise ProofError("database_schema_unavailable", "required database schema is unavailable", 503)
     return {"status": "ready"}
 
 

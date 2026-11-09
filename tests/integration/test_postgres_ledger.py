@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import uuid
 import json
+import os
+import subprocess
+import sys
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
@@ -14,10 +18,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from sqlalchemy.orm import sessionmaker
 from fastapi import Request, Response
+from fastapi.testclient import TestClient
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
 
 from proof.config import settings
 from proof.demo import DEMO_ADMISSION_LOCK, adjust_demo_finding, run_canonical_scenario
-from proof import maintenance
+from proof import main as api, maintenance
 from proof.identity import DemoCredential, TenantAccess, issue_operator_credential
 from proof.ledger.models import Tenant
 from proof.reconciliation import service as reconciliation_service
@@ -80,6 +86,116 @@ def _ledger_fixture():
         left = service.create_account(session, tenant.id, "Clearing", "NGN")
         right = service.create_account(session, tenant.id, "Merchant payable", "NGN")
         return tenant.id, left.id, right.id
+
+
+@pytest.mark.parametrize(("schema_setup", "expected_status"), [
+    (None, 200),
+    ("UPDATE alembic_version SET version_num = '0011'", 200),
+    ("UPDATE alembic_version SET version_num = '0010'", 503),
+    ("DELETE FROM alembic_version", 503),
+    ("ALTER TABLE demo_credentials RENAME TO unavailable_credentials", 503),
+    ("SET LOCAL search_path = pg_catalog", 503),
+])
+def test_readiness_checks_postgres_schema(monkeypatch, schema_setup, expected_status):
+    @contextmanager
+    def probe_session():
+        with SessionLocal() as session:
+            if schema_setup:
+                session.execute(text(schema_setup))
+            yield session
+
+    monkeypatch.setattr(api, "SessionLocal", probe_session)
+    with TestClient(api.app) as client:
+        assert client.get("/health").status_code == 200
+        result = client.get("/ready")
+    assert result.status_code == expected_status
+    if expected_status == 503:
+        assert result.json()["error"]["code"] == "database_schema_unavailable"
+
+
+def test_api_trace_reaches_worker_and_http_receiver():
+    exports = []
+    deliveries = []
+
+    class Receiver(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            if self.path == "/v1/traces":
+                exports.append(ExportTraceServiceRequest.FromString(body))
+            else:
+                deliveries.append((self.headers["Idempotency-Key"], json.loads(body)))
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    with SessionLocal() as session:
+        schema = session.scalar(text("SELECT current_schema()"))
+    database_url = SessionLocal.kw["bind"].url.update_query_dict({"options": f"-csearch_path={schema}"})
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), Receiver) as server:
+        server_thread = Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        endpoint = f"http://127.0.0.1:{server.server_port}"
+        env = {
+            **os.environ,
+            "PROOF_DATABASE_URL": database_url.render_as_string(hide_password=False),
+            "PROOF_ENVIRONMENT": "sandbox",
+            "PROOF_OTLP_TRACES_ENDPOINT": f"{endpoint}/v1/traces",
+            "OTEL_EXPORTER_OTLP_HEADERS": "",
+            "OTEL_EXPORTER_OTLP_TRACES_HEADERS": "",
+            "PROOF_OUTBOX_URL": f"{endpoint}/events",
+            "PROOF_OUTBOX_TOKEN": "",
+            "PROOF_OUTBOX_FAIL_EVENT_TYPES": "",
+        }
+        try:
+            for source, args in (
+                ("""
+from fastapi.testclient import TestClient
+from proof.main import app
+with TestClient(app) as client:
+    client.post("/v1/demo/scenarios/canonical").raise_for_status()
+""", []),
+                ("""
+from proof.messaging.worker import run
+run()
+""", ["--once"]),
+            ):
+                subprocess.run(
+                    [sys.executable, "-c", source + """
+from opentelemetry import trace
+assert trace.get_tracer_provider().force_flush()
+""", *args],
+                    env=env, check=True, timeout=45,
+                )
+        finally:
+            server.shutdown()
+            server_thread.join()
+
+    assert len(deliveries) == 1
+    key, event = deliveries[0]
+    assert key == event["id"]
+    spans = [
+        (span, next(attr.value.string_value for attr in resource.resource.attributes
+                    if attr.key == "service.name"))
+        for export in exports
+        for resource in export.resource_spans
+        for scope in resource.scope_spans
+        for span in scope.spans
+    ]
+    (request, api_service), = (item for item in spans if item[0].name == "proof.request")
+    (delivery, worker_service), = (item for item in spans if item[0].name == "proof.outbox.deliver")
+    assert (api_service, worker_service) == ("proof-api", "proof-worker")
+    assert delivery.trace_id == request.trace_id
+    assert delivery.parent_span_id.hex() == event["data"]["traceparent"].split("-")[2]
+    api_spans = {span.span_id: span for span, service_name in spans if service_name == "proof-api"}
+    ancestor = delivery
+    for _ in api_spans:
+        ancestor = api_spans[ancestor.parent_span_id]
+        if ancestor.span_id == request.span_id:
+            break
+    assert ancestor.span_id == request.span_id
 
 
 def test_demo_admission_lock_is_shared_across_postgres_connections() -> None:

@@ -35,7 +35,7 @@ the stack and keep the local database.
 | --- | --- |
 | [Console](http://127.0.0.1:18080/) | Guided reconciliation and ledger views |
 | [Swagger UI](http://127.0.0.1:18080/docs) | Explore the API contract |
-| [Readiness](http://127.0.0.1:18080/ready) | Check database connectivity |
+| [Readiness](http://127.0.0.1:18080/ready) | Check database access and schema compatibility |
 | [Grafana](http://127.0.0.1:13001/d/proof-operations) | Request latency, queue health, and open findings with the `observe` profile |
 
 ## How it works
@@ -84,6 +84,9 @@ uv run proof-api
 The source workflow uses Python 3.12+ and Node.js 24. PostgreSQL tests create
 and remove their own schema, so use a test or local database role with schema
 creation privileges. `uv run pytest` runs the fast API suite alone.
+The fast suite includes generated journal and idempotency properties. The
+PostgreSQL suite also checks schema readiness and links an exported API span to
+its worker delivery span through a loopback OTLP receiver.
 
 To verify the running Docker demo over HTTP:
 

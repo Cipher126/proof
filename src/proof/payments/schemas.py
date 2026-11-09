@@ -37,6 +37,13 @@ class TransferRead(BaseModel):
     created_at: datetime
     completed_at: datetime | None
 
+    @field_validator("created_at", "completed_at", "hold_expires_at")
+    @classmethod
+    def utc_timestamp(cls, timestamp: datetime | None) -> datetime | None:
+        if timestamp is None:
+            return None
+        return timestamp.replace(tzinfo=timezone.utc) if timestamp.tzinfo is None else timestamp.astimezone(timezone.utc)
+
 
 class PaymentAction(BaseModel):
     action: Literal["authorize", "submit", "capture", "fail", "cancel", "expire", "refund"]

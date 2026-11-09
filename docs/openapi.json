@@ -1639,6 +1639,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Database or schema unavailable"
           }
         }
       }

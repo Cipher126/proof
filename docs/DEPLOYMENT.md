@@ -14,6 +14,8 @@ The [Render Blueprint](../render.yaml) defines one Free Docker web service. It b
 
 Render Free sleeps when idle, and Neon Free can scale to zero. Budget for the first request to take longer and check both providers' quotas. The default proxy trust setting stays restricted to loopback. With a shared proxy address, Proof applies the same conservative admission bucket to visitors behind that address. Monitor demo 429 responses and run the retention command from a trusted host when the dedicated database approaches its scenario cap.
 
+`/health` reports process liveness. `/ready` requires a supported Alembic revision and readable ledger, transfer, and credential tables. A 503 with `database_schema_unavailable` points to the database target, migration revision, or runtime grants. Verify the full smoke flow after readiness returns.
+
 [Render Free limitations](https://render.com/docs/free) · [Render Blueprint specification](https://render.com/docs/blueprint-spec) · [Neon connection configuration](https://neon.com/docs/connect/connect-from-any-app) · [Neon roles](https://neon.com/docs/manage/roles) · [Neon plans](https://neon.com/docs/introduction/plans)
 
 ## Configure the host
@@ -53,3 +55,5 @@ Issue outputs the bearer token once. Store it securely. Integrators can create a
 ## Observe and deliver
 
 For local monitoring, start `docker compose --profile observe up -d` and open Grafana on port 13001. Set `PROOF_OTLP_TRACES_ENDPOINT` to a reachable HTTP trace endpoint when running a collector. For external delivery, enable the worker profile and set `PROOF_OUTBOX_URL` to an approved HTTPS receiver. The receiver must deduplicate the stable `Idempotency-Key`.
+
+For a hosted verification, set the API and worker to the same OTLP/HTTP collector endpoint, including its trace path, usually `/v1/traces`. Configure collector authentication through the host's secret settings. Start one fictional scenario, confirm the receiver gets the event ID as the `Idempotency-Key`, and confirm the collector shows `proof.request` and `proof.outbox.deliver` in the same trace. Record the deployed revision, event ID, and trace ID in the release notes.
