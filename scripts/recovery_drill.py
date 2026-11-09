@@ -14,12 +14,12 @@ import httpx
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 
-from benchmark_api import run as benchmark
+from benchmark_api import compare as benchmark
 from reconciliation_profile import HISTORY_SIZE, explain, seed_history
 from smoke_demo import check, verify
 
 CHECKED_TABLES = (
-    "accounts", "transfers", "journal_transactions", "journal_entries",
+    "accounts", "transfers", "journal_transactions", "journal_entries", "demo_credentials",
     "statement_imports", "reconciliation_findings", "outbox_events",
 )
 ARCHIVE = "/tmp/proof-drill.dump"
@@ -104,8 +104,15 @@ def drill(image: str) -> dict:
                    image, ".venv/bin/alembic", "upgrade", revision)
             return round(time.monotonic() - start, 3)
 
-        def grant(db: str) -> None:
-            db_tool("psql", "-v", "ON_ERROR_STOP=1", "-d", db, sql=RUNTIME_GRANTS.read_text(encoding="utf-8"))
+        def grant(db: str, *, operations: bool = False) -> None:
+            mode = "on" if operations else "off"
+            db_tool("psql", "-v", "ON_ERROR_STOP=1", "-v", f"proof_operations={mode}",
+                    "-d", db, sql=RUNTIME_GRANTS.read_text(encoding="utf-8"))
+            permissions = db_tool("psql", "-v", "ON_ERROR_STOP=1", "-At", "-d", db, "-c", """
+                SELECT has_table_privilege('proof_runtime', 'operator_credentials', 'SELECT'),
+                       has_table_privilege('proof_runtime', 'operator_credentials', 'INSERT,UPDATE,DELETE');
+            """)
+            check(permissions == ("t|f" if operations else "f|f"), "unexpected operator credential grants")
 
         def engine_for(db: str, user: str = "postgres"):
             # Docker can assign a new host port when a stopped container restarts.
@@ -134,9 +141,10 @@ def drill(image: str) -> dict:
 
         print("Migrating to the previous revision and seeding the fictional history.", flush=True)
         migrate("proof", "0011")
+        grant("proof", operations=True)
         grant("proof")
         source_api = launch("source", "proof", "sandbox")
-        verify(source_api)
+        tenant_id, transfer_id, access_token = verify(source_api)
         source = engine_for("proof")
         tenant = seed_history(source)
         before = explain(source, tenant)
@@ -186,15 +194,18 @@ def drill(image: str) -> dict:
         grant("restored")
         assert_immutable(runtime)
         restored_api = launch("restored", "restored", "sandbox")
+        recovered = restored_api.get(
+            f"/v1/tenants/{tenant_id}/operations/transfers/{transfer_id}/timeline",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        recovered.raise_for_status()
+        check(recovered.json()["transfer_id"] == transfer_id, "restored session could not read the original transfer")
         verify(restored_api)
         recovery_seconds = round(time.monotonic() - restore_started, 3)
 
         print("Comparing hot and spread HTTP traffic with PostgreSQL lock sampling.", flush=True)
         development = launch("development", "restored", "development")
-        contention = {
-            layout: benchmark(str(development.base_url), 100, 8, layout, restored)
-            for layout in ("hot", "spread")
-        }
+        contention = benchmark(str(development.base_url), 100, 8, restored)
         return {
             "started_at": started,
             "postgresql": version,
@@ -205,6 +216,7 @@ def drill(image: str) -> dict:
                 "archive_revision": revision,
                 "checkpoint_table_row_counts": {table: data[0] for table, data in checkpoint.items()},
                 "checkpoint_matches_restored_data": True,
+                "pre_backup_session_verified": True,
                 "post_backup_canary_restored": False,
                 "unbalanced_journals": unbalanced,
                 "posted_entry_mutation_rejected": True,
@@ -226,6 +238,8 @@ def main() -> None:
     report = drill(args.image)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if any(workload["errors"] for workload in report["contention"].values()):
+        parser.exit(1, f"Benchmark verification failed. See {args.output}.\n")
     print(f"Recovery and performance verification passed. Report written to {args.output}.")
 
 

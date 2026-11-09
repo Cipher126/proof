@@ -8,12 +8,12 @@ The packaged API handles 100 one-unit transfers at concurrency eight in each run
 
 The sampler queries `pg_stat_activity` about every 10 ms for sessions tagged with the drill API's application name and waiting on a PostgreSQL lock. Sample counts indicate observed contention. They do not measure per-request wait time, and waits between samples can be missed. End-to-end latency also includes client, API, database, and outbox work.
 
+The comparison saves both workload outcomes, including HTTP status counts, transport failures, and validation errors. A failed workload makes the command exit nonzero after saving the report.
+
 | Workload | HTTP 201 | p95 | Transfers/s | Samples with lock waiters | Peak waiters |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Hot pair | 100/100 | 508.86 ms | 18.83 | 268/276 | 7 |
-| Spread pairs | 100/100 | 513.33 ms | 19.17 | 0/281 | 0 |
-
-The spread workload removed the sampled lock waits. HTTP latency was similar in this run, so the data supports a contention diagnosis without attributing end-to-end latency to that lock alone.
+| Hot pair | 100/100 | 392.63 ms | 30.71 | 177/182 | 7 |
+| Spread pairs | 100/100 | 337.16 ms | 31.94 | 0/196 | 0 |
 
 The protected-account lock remains in place. It serializes competing spending on the same account so two transfers cannot both spend the same available balance.
 
@@ -23,8 +23,8 @@ The fixture contains 40,000 successful fictional transfers with balanced posted 
 
 | Revision | Candidate lookup plan | Median execution | Shared buffer hits in the recorded plan |
 | --- | --- | ---: | ---: |
-| 0011 | Sequential scan | 17.892 ms | 1,001 |
-| 0012 | Bitmap OR over both indexes | 0.276 ms | 8 |
+| 0011 | Sequential scan | 5.663 ms | 1,001 |
+| 0012 | Bitmap OR over both indexes | 0.215 ms | 8 |
 
 The partial index on tenant and completion time covers the posted-window branch. The existing unique index covers the explicit-reference branch. The new index adds work when a transfer posts, and the one-time transactional build requires a quiet write window on populated databases. See [ADR-014](../DECISIONS.md#adr-014-index-the-posted-transfer-window-used-for-reconciliation).
 

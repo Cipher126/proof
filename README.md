@@ -108,7 +108,7 @@ should be enabled only on a dedicated demo database.
 ## Engineering evidence
 
 On a local dataset of 40,000 fictional transfers, the reconciliation candidate
-lookup went from 17.89 ms to 0.28 ms median and returned the same results.
+lookup went from 5.663 ms to 0.215 ms median and returned the same results.
 The recovery drill restored the ledger checkpoint, applied the latest migration,
 and passed the end-to-end settlement scenario.
 

@@ -7,7 +7,7 @@ Use an isolated PostgreSQL database for the fictional public sandbox. Keep named
 The [Render Blueprint](../render.yaml) defines one Free Docker web service. It binds to Render's `PORT`, checks `/ready`, and generates distinct secrets for admission and simulated provider signatures. Neon supplies the database. The public demo runs the dashboard and API. The webhook worker and retention loop are separate processes in the Compose deployment.
 
 1. Create a dedicated Neon Free project in a region close to the Render service. Use the migration owner's **direct** connection with TLS. Use `postgresql+psycopg://` for Alembic and the API and `postgresql://` for `psql`. Keep the migration connection in a private local environment.
-2. Run `uv sync --frozen`, then run `uv run alembic upgrade head` with `PROOF_DATABASE_URL` set to the migration owner's connection. Create a `proof_runtime` login using SQL and a generated password stored in a secret manager. Apply [runtime grants](../deploy/runtime_grants.sql) as the migration owner. Create the login via SQL to avoid Neon's elevated role membership for console-created roles.
+2. Run `uv sync --frozen`, then run `uv run alembic upgrade head` with `PROOF_DATABASE_URL` set to the migration owner's connection. Create a `proof_runtime` login using SQL and a generated password stored in a secret manager. Apply [runtime grants](../deploy/runtime_grants.sql) with `psql -v ON_ERROR_STOP=1 -f deploy/runtime_grants.sql` as the migration owner. Create the login via SQL to avoid Neon's elevated role membership for console-created roles.
 3. Connect the Git repository in Render and create a Blueprint from `render.yaml`. Supply the TLS-enabled `proof_runtime` connection as `PROOF_DATABASE_URL`. Use the Free plan and confirm the region and allowances before provisioning.
 4. Wait for the first deployment and run `uv run python scripts/smoke_demo.py --base-url https://YOUR-SERVICE.onrender.com`. Record the deployed Git commit, migration revision, public URL, and smoke result. Confirm that a request without credentials returns 401 on a tenant route and that `/metrics` returns 404.
 5. For updates, take a backup, apply the migration and runtime grants, then manually deploy the reviewed commit. Render Free runs without a pre-deploy hook. For the additive index in 0012, the prior application can keep running against the migrated database. Deploy the previous image if the application rollout fails and keep the compatible index in place.
@@ -40,7 +40,7 @@ Use `--profile retain` on the dedicated sandbox after taking a backup and review
 
 ## Operate named credentials
 
-Set `PROOF_ENVIRONMENT=operations` for a dedicated operator deployment. Provision a tenant and key with the administrative CLI over a trusted connection:
+Set `PROOF_ENVIRONMENT=operations` for a dedicated operator deployment. Run the runtime grants with `psql -v ON_ERROR_STOP=1 -v proof_operations=on -f deploy/runtime_grants.sql` as the migration owner. This gives the runtime read-only access to operator credentials. Run the administrative CLI with a separate trusted connection that can manage credentials.
 
 ```bash
 python -m proof.admin tenant "Fictional operations"

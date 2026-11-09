@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-11-08T17:05:01.299852+00:00",
+  "started_at": "2026-11-09T13:46:10.921078+00:00",
   "postgresql": "17.10",
   "reconciliation": {
     "synthetic_transfers": 40000,
@@ -16,11 +16,11 @@
         "profile-40000"
       ],
       "execution_ms": [
-        17.892,
-        20.009,
-        15.188,
-        16.607,
-        24.115
+        7.876,
+        5.592,
+        5.663,
+        6.057,
+        5.485
       ],
       "plan": {
         "Node Type": "Seq Scan",
@@ -30,13 +30,13 @@
         "Alias": "transfers",
         "Startup Cost": 0.0,
         "Total Cost": 1801.02,
-        "Plan Rows": 6,
+        "Plan Rows": 12,
         "Plan Width": 165,
-        "Actual Startup Time": 0.026,
-        "Actual Total Time": 24.066,
+        "Actual Startup Time": 0.011,
+        "Actual Total Time": 5.467,
         "Actual Rows": 9,
         "Actual Loops": 1,
-        "Filter": "((tenant_id = '254f4b59-42c7-4298-90bc-afcaac0fba4a'::uuid) AND (((client_reference)::text = 'profile-1'::text) OR ((journal_id IS NOT NULL) AND (completed_at >= '2026-01-02 00:00:00+00'::timestamp with time zone) AND (completed_at <= '2026-01-03 00:00:00+00'::timestamp with time zone))))",
+        "Filter": "((tenant_id = '5a938c6b-69a2-49a8-b7ca-e4aa904e177c'::uuid) AND (((client_reference)::text = 'profile-1'::text) OR ((journal_id IS NOT NULL) AND (completed_at >= '2026-01-02 00:00:00+00'::timestamp with time zone) AND (completed_at <= '2026-01-03 00:00:00+00'::timestamp with time zone))))",
         "Rows Removed by Filter": 39992,
         "Shared Hit Blocks": 1001,
         "Shared Read Blocks": 0,
@@ -63,11 +63,11 @@
         "profile-40000"
       ],
       "execution_ms": [
-        0.258,
-        0.314,
-        0.353,
-        0.276,
-        0.253
+        0.138,
+        0.184,
+        0.215,
+        0.355,
+        0.278
       ],
       "plan": {
         "Node Type": "Bitmap Heap Scan",
@@ -75,15 +75,15 @@
         "Async Capable": false,
         "Relation Name": "transfers",
         "Alias": "transfers",
-        "Startup Cost": 8.78,
-        "Total Cost": 31.51,
-        "Plan Rows": 6,
+        "Startup Cost": 8.86,
+        "Total Cost": 53.16,
+        "Plan Rows": 12,
         "Plan Width": 165,
-        "Actual Startup Time": 0.071,
-        "Actual Total Time": 0.085,
+        "Actual Startup Time": 0.094,
+        "Actual Total Time": 0.104,
         "Actual Rows": 9,
         "Actual Loops": 1,
-        "Recheck Cond": "(((tenant_id = '254f4b59-42c7-4298-90bc-afcaac0fba4a'::uuid) AND ((client_reference)::text = 'profile-1'::text)) OR ((tenant_id = '254f4b59-42c7-4298-90bc-afcaac0fba4a'::uuid) AND (completed_at >= '2026-01-02 00:00:00+00'::timestamp with time zone) AND (completed_at <= '2026-01-03 00:00:00+00'::timestamp with time zone) AND (journal_id IS NOT NULL)))",
+        "Recheck Cond": "(((tenant_id = '5a938c6b-69a2-49a8-b7ca-e4aa904e177c'::uuid) AND ((client_reference)::text = 'profile-1'::text)) OR ((tenant_id = '5a938c6b-69a2-49a8-b7ca-e4aa904e177c'::uuid) AND (completed_at >= '2026-01-02 00:00:00+00'::timestamp with time zone) AND (completed_at <= '2026-01-03 00:00:00+00'::timestamp with time zone) AND (journal_id IS NOT NULL)))",
         "Rows Removed by Index Recheck": 0,
         "Exact Heap Blocks": 3,
         "Lossy Heap Blocks": 0,
@@ -103,12 +103,12 @@
             "Parent Relationship": "Outer",
             "Parallel Aware": false,
             "Async Capable": false,
-            "Startup Cost": 8.78,
-            "Total Cost": 8.78,
-            "Plan Rows": 6,
+            "Startup Cost": 8.86,
+            "Total Cost": 8.86,
+            "Plan Rows": 12,
             "Plan Width": 0,
-            "Actual Startup Time": 0.051,
-            "Actual Total Time": 0.052,
+            "Actual Startup Time": 0.081,
+            "Actual Total Time": 0.081,
             "Actual Rows": 0,
             "Actual Loops": 1,
             "Shared Hit Blocks": 5,
@@ -132,11 +132,11 @@
                 "Total Cost": 4.42,
                 "Plan Rows": 1,
                 "Plan Width": 0,
-                "Actual Startup Time": 0.037,
-                "Actual Total Time": 0.037,
+                "Actual Startup Time": 0.022,
+                "Actual Total Time": 0.022,
                 "Actual Rows": 1,
                 "Actual Loops": 1,
-                "Index Cond": "((tenant_id = '254f4b59-42c7-4298-90bc-afcaac0fba4a'::uuid) AND ((client_reference)::text = 'profile-1'::text))",
+                "Index Cond": "((tenant_id = '5a938c6b-69a2-49a8-b7ca-e4aa904e177c'::uuid) AND ((client_reference)::text = 'profile-1'::text))",
                 "Shared Hit Blocks": 3,
                 "Shared Read Blocks": 0,
                 "Shared Dirtied Blocks": 0,
@@ -155,14 +155,14 @@
                 "Async Capable": false,
                 "Index Name": "ix_transfers_posted_window",
                 "Startup Cost": 0.0,
-                "Total Cost": 4.35,
-                "Plan Rows": 5,
+                "Total Cost": 4.43,
+                "Plan Rows": 11,
                 "Plan Width": 0,
-                "Actual Startup Time": 0.013,
-                "Actual Total Time": 0.014,
+                "Actual Startup Time": 0.058,
+                "Actual Total Time": 0.058,
                 "Actual Rows": 8,
                 "Actual Loops": 1,
-                "Index Cond": "((tenant_id = '254f4b59-42c7-4298-90bc-afcaac0fba4a'::uuid) AND (completed_at >= '2026-01-02 00:00:00+00'::timestamp with time zone) AND (completed_at <= '2026-01-03 00:00:00+00'::timestamp with time zone))",
+                "Index Cond": "((tenant_id = '5a938c6b-69a2-49a8-b7ca-e4aa904e177c'::uuid) AND (completed_at >= '2026-01-02 00:00:00+00'::timestamp with time zone) AND (completed_at <= '2026-01-03 00:00:00+00'::timestamp with time zone))",
                 "Shared Hit Blocks": 2,
                 "Shared Read Blocks": 0,
                 "Shared Dirtied Blocks": 0,
@@ -179,33 +179,35 @@
         ]
       }
     },
-    "migration_seconds_including_container_start": 12.035
+    "migration_seconds_including_container_start": 5.248
   },
   "recovery": {
-    "backup_seconds": 2.848,
+    "backup_seconds": 1.347,
     "archive_revision": "0011",
     "checkpoint_table_row_counts": {
       "accounts": 6,
       "transfers": 40001,
       "journal_transactions": 40003,
       "journal_entries": 80006,
+      "demo_credentials": 1,
       "statement_imports": 1,
       "reconciliation_findings": 1,
       "outbox_events": 1
     },
     "checkpoint_matches_restored_data": true,
+    "pre_backup_session_verified": true,
     "post_backup_canary_restored": false,
     "unbalanced_journals": 0,
     "posted_entry_mutation_rejected": true,
     "liveness_during_outage": 200,
     "readiness_during_outage": 503,
-    "readiness_after_restart_seconds": 1.254,
-    "restore_seconds": 4.747,
-    "restore_through_migration_and_http_smoke_seconds": 32.228
+    "readiness_after_restart_seconds": 0.739,
+    "restore_seconds": 3.813,
+    "restore_through_migration_and_http_smoke_seconds": 19.397
   },
   "contention": {
     "hot": {
-      "generated_at": "2026-11-08T17:07:57.298957+00:00",
+      "generated_at": "2026-11-09T13:47:46.763849+00:00",
       "scope": "local synthetic portfolio evidence; not a production capacity claim",
       "environment": {
         "platform": "Windows-11-10.0.26300-SP0",
@@ -217,28 +219,30 @@
         "account_pairs": 1,
         "layout": "hot"
       },
+      "errors": [],
       "results": {
         "status_counts": {
           "201": 100
         },
-        "wall_seconds": 5.3093,
-        "throughput_per_second": 18.83,
+        "transport_errors": 0,
+        "wall_seconds": 3.2565,
+        "throughput_per_second": 30.71,
         "lock_samples": {
-          "total": 276,
-          "with_waiters": 268,
+          "total": 182,
+          "with_waiters": 177,
           "peak_waiters": 7
         },
         "latency_ms": {
-          "min": 205.08,
-          "mean": 411.0,
-          "p50": 393.61,
-          "p95": 508.86,
-          "max": 722.71
+          "min": 55.99,
+          "mean": 252.32,
+          "p50": 239.88,
+          "p95": 392.63,
+          "max": 419.07
         }
       }
     },
     "spread": {
-      "generated_at": "2026-11-08T17:08:03.716705+00:00",
+      "generated_at": "2026-11-09T13:47:50.468860+00:00",
       "scope": "local synthetic portfolio evidence; not a production capacity claim",
       "environment": {
         "platform": "Windows-11-10.0.26300-SP0",
@@ -250,23 +254,25 @@
         "account_pairs": 8,
         "layout": "spread"
       },
+      "errors": [],
       "results": {
         "status_counts": {
           "201": 100
         },
-        "wall_seconds": 5.2164,
-        "throughput_per_second": 19.17,
+        "transport_errors": 0,
+        "wall_seconds": 3.131,
+        "throughput_per_second": 31.94,
         "lock_samples": {
-          "total": 281,
+          "total": 196,
           "with_waiters": 0,
           "peak_waiters": 0
         },
         "latency_ms": {
-          "min": 212.69,
-          "mean": 410.94,
-          "p50": 406.24,
-          "p95": 513.33,
-          "max": 667.34
+          "min": 58.88,
+          "mean": 244.22,
+          "p50": 231.7,
+          "p95": 337.16,
+          "max": 389.17
         }
       }
     }

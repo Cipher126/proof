@@ -11,7 +11,7 @@ def check(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def verify(client: httpx.Client) -> None:
+def verify(client: httpx.Client) -> tuple[str, str, str]:
     ready = client.get("/ready")
     ready.raise_for_status()
     check(ready.json()["status"] == "ready", "database is not ready")
@@ -57,6 +57,7 @@ def verify(client: httpx.Client) -> None:
     balance = request("GET", f"/accounts/{scenario['accounts']['customer']}/balance")
     check(balance["balance_minor"] == 2_475_000, "unexpected customer balance")
     check(request("POST", close)["status"] == "closed", "settlement batch did not close")
+    return scenario["tenant_id"], transfer["id"], scenario["access_token"]
 
 
 def main() -> None:
